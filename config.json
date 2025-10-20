@@ -1,16 +1,17 @@
-{
-    "quantum-efficiencies": {
-        "R": {
+[
+    {
+        "name": "ASI2400MC",
+        "qe_red": {
             "ha": 0.8,
             "oiii": 0.03
         },
-        "G": {
+        "qe_green": {
             "ha": 0.15,
             "oiii": 0.925
         },
-        "B": {
+        "qe_blue": {
             "ha": 0.05,
             "oiii": 0.5
         }
     }
-}
+]
