@@ -14,8 +14,9 @@ mod genetics;
 mod normal_disr;
 
 const POP_SIZE: usize = 100;
-const GENS: u32 = 200;
-const MUTATION_STD: f64 = 0.05;
+const GENS: u32 = 500;
+const INITIAL_STD: f64 = 0.05;
+const DECAY_RATE: f64 = 0.005;
 const ELITISM: usize = 5;
 const LAMBDA: f64 = 1e6;
 
@@ -85,7 +86,9 @@ fn main() {
             indices[..ELITISM].to_vec()
         };
         let elites = elite_indices.iter().map(|&i| population[i]).collect::<Vec<Genome>>();
+
         let mut new_population = elites.clone();
+        let mutation_rate = INITIAL_STD * (-DECAY_RATE * gen as f64).exp();
         while new_population.len() < POP_SIZE {
             let idx1 = rng.random_range(0..POP_SIZE);
             let mut idx2 = rng.random_range(0..POP_SIZE);
@@ -98,23 +101,31 @@ fn main() {
                 population[idx2]
             };
             let child = Genome {
-                ha_a: parent.ha_a + rng.sample(NormalDistribution::new(0.0, MUTATION_STD)),
-                ha_b: parent.ha_b + rng.sample(NormalDistribution::new(0.0, MUTATION_STD)),
-                ha_c: parent.ha_c + rng.sample(NormalDistribution::new(0.0, MUTATION_STD)),
-                oiii_a: parent.oiii_a + rng.sample(NormalDistribution::new(0.0, MUTATION_STD)),
-                oiii_b: parent.oiii_b + rng.sample(NormalDistribution::new(0.0, MUTATION_STD)),
-                oiii_c: parent.oiii_c + rng.sample(NormalDistribution::new(0.0, MUTATION_STD))
+                ha_r: parent.ha_r + rng.sample(NormalDistribution::new(0.0, mutation_rate)),
+                ha_g: parent.ha_g + rng.sample(NormalDistribution::new(0.0, mutation_rate)),
+                ha_b: parent.ha_b + rng.sample(NormalDistribution::new(0.0, mutation_rate)),
+                oiii_r: parent.oiii_r + rng.sample(NormalDistribution::new(0.0, mutation_rate)),
+                oiii_g: parent.oiii_g + rng.sample(NormalDistribution::new(0.0, mutation_rate)),
+                oiii_b: parent.oiii_b + rng.sample(NormalDistribution::new(0.0, mutation_rate))
             };
             new_population.push(child);
         }
 
         population = new_population;
-        let best_fitness = fitnesses.iter().min_by(|&a, &b| a.partial_cmp(b).unwrap()).unwrap();
-        println!("Gen {}: best fitness = {}", gen, best_fitness);
+        let (best_genome, best_fitness) = best_genome_and_fitness(&population, &fitnesses);
+        println!(r"
+Generation {}:
+    Best fitness = {}
+    Noise = {}
+        ", gen, best_fitness, context.noise_fitness(&best_genome.as_gpu_genome(context), &image).unwrap());
     }
 
-    let (best_idx, best_fitness) = fitnesses.iter().enumerate().min_by(|&(_, a), &(_, b)| a.partial_cmp(b).unwrap()).unwrap();
-    let best_genome = population[best_idx];
+    let (best_genome, best_fitness) = best_genome_and_fitness(&population, &fitnesses);
     println!("Best genome found: {:?}", best_genome);
     println!("Fitness: {}", best_fitness);
+}
+
+fn best_genome_and_fitness(population: &Vec<Genome>, fitnesses: &Vec<f64>) -> (Genome, f64) {
+    let (best_idx, _) = fitnesses.iter().enumerate().min_by(|&(_, a), &(_, b)| a.partial_cmp(b).unwrap()).unwrap();
+    (population[best_idx], fitnesses[best_idx])
 }
