@@ -29,7 +29,7 @@ fn main() {
     let camera = &cameras[0];
     println!("Using camera: {:?}", camera);
 
-    let image = Fits::open("image.fit").expect("Failed to open FITS file");
+    let image = Fits::open("image_fake.fit").expect("Failed to open FITS file");
     let (shape, data) = match image.get(0).expect("No HDU found").read_data() {
         FitsData::Characters(_) => panic!("Did not expect character data"),
         FitsData::IntegersI32(_) => panic!("Did not expect i32 data"),
@@ -69,13 +69,13 @@ fn main() {
 
     let ha_hdu = Hdu::new(
         &[h_alpha.shape()[1], h_alpha.shape()[0]],
-        h_alpha.as_slice().unwrap().to_vec()
+        h_alpha.as_slice().unwrap().to_vec(),
     );
     Fits::create("h_alpha.fit", ha_hdu).expect("Failed to write H-alpha FITS file");
 
     let oiii_hdu = Hdu::new(
         &[oiii.shape()[1], oiii.shape()[0]],
-        oiii.as_slice().unwrap().to_vec()
+        oiii.as_slice().unwrap().to_vec(),
     );
     Fits::create("oiii.fit", oiii_hdu).expect("Failed to write OIII FITS file");
 }
@@ -94,17 +94,20 @@ fn optimized_genome(
                 &context,
                 [red.len() as i64],
                 red.flatten().as_slice().unwrap(),
-            ).unwrap(),
+            )
+            .unwrap(),
             &ArrayF64D1::new(
                 &context,
                 [green.len() as i64],
                 green.flatten().as_slice().unwrap(),
-            ).unwrap(),
+            )
+            .unwrap(),
             &ArrayF64D1::new(
                 &context,
                 [blue.len() as i64],
                 blue.flatten().as_slice().unwrap(),
-            ).unwrap(),
+            )
+            .unwrap(),
         )
         .unwrap();
 

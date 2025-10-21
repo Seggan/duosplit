@@ -11,14 +11,12 @@ pub struct Camera {
 
 #[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 pub struct QuantumEfficiency {
-    #[serde(rename = "ha")]
-    pub hydrogen_alpha: f64,
-    #[serde(rename = "oiii")]
-    pub oxygen_iii: f64
+    pub ha: f64,
+    pub oiii: f64
 }
 
 impl QuantumEfficiency {
     pub fn as_gpu_qe(self, context: &'_ Context) -> QE<'_> {
-        QE::new(context, self.hydrogen_alpha, self.oxygen_iii).unwrap()
+        QE::new(context, self.ha, self.oiii).unwrap()
     }
 }
