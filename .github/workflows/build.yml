@@ -60,12 +60,12 @@ jobs:
       - name: Build release
         env:
           CARGO_TARGET_DIR: target/${{ matrix.os }}-${{ matrix.arch }}
-        run: cargo build --release --target ${{ steps.target.outputs.target_triple }}
+        run: cargo build --release
 
       - name: Package artifact
         run: |
           mkdir -p dist
-          target_dir="target/${{ matrix.os }}-${{ matrix.arch }}/${{ steps.target.outputs.target_triple }}/release"
+          target_dir="target/release"
           BIN_NAME="your-binary-name"
           if [[ "${{ matrix.os }}" == "windows-latest" ]]; then BIN_NAME="${BIN_NAME}.exe"; fi
           cp "$target_dir/$BIN_NAME" "dist/${BIN_NAME}-${{ matrix.os }}-${{ matrix.arch }}"
