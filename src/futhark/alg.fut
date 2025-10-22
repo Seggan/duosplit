@@ -1,26 +1,13 @@
 type Genome = {
-    ha_r: f64,
-    ha_g: f64,
-    ha_b: f64,
-    oiii_r: f64,
-    oiii_g: f64,
-    oiii_b: f64
+    i: f64,
+    x: f64
 }
 
-entry new_genome (ha_r: f64) (ha_g: f64) (ha_b: f64)
-                     (oiii_r: f64) (oiii_g: f64) (oiii_b: f64) : Genome =
-    { ha_r = ha_r,
-      ha_g = ha_g,
-      ha_b = ha_b,
-      oiii_r = oiii_r,
-      oiii_g = oiii_g,
-      oiii_b = oiii_b }
+type Genomes [n] = [n]Genome
 
-type GenomeList [n] = [n]Genome
+entry new_genomes : Genomes[] = []
 
-entry new_genomes : GenomeList[] = []
-
-entry add_genome (genomes: GenomeList[]) (genome: Genome) : GenomeList[] =
+entry add_genome [n] (genomes: Genomes[n]) (genome: Genome) : Genomes[n + 1] =
     genomes ++ [genome]
 
 type Pixel = {
@@ -57,28 +44,28 @@ type QE = {
 -- ax + cy + ez = 0
 -- bx + dy + fz = 1
 
+-- j = (d + b c i - a d i)/(d e - c f)
+-- k = (-f - b e i + a f i)/(d e - c f)
+
+entry j_k_from_i (i: f64) (a: f64) (c: f64) (e: f64) (b: f64) (d: f64) (f: f64) : (f64, f64) =
+    let denom = d * e - c * f
+    let j = (d + b * c * i - a * d * i) / denom
+    let k = (-f - b * e * i + a * f * i) / denom
+    in (j, k)
+
 def pixel_noise (a: f64) (b: f64) (c: f64) (pixel: Pixel) : f64 =
     a * a * pixel.r + b * b * pixel.g + c * c * pixel.b
 
-def noise [l] (a: f64) (b: f64) (c: f64) (image: Image[l]) : f64 =
-    reduce (+) 0.0 (map (\pixel -> pixel_noise a b c pixel) image) / f64.i64 (length image)
+def noise [l] (i: f64) (j: f64) (k: f64) (image: Image[l]) : f64 =
+    reduce (+) 0.0 (map (\pixel -> pixel_noise i j k pixel) image) / f64.i64 (length image)
 
-def constraint_fitness (genome: Genome) (qeR: QE) (qeG: QE) (qeB: QE) : f64 =
-    let c1 = qeR.ha * genome.ha_r + qeG.ha * genome.ha_g + qeB.ha * genome.ha_b - 1.0
-    let c2 = qeR.oiii * genome.ha_r + qeG.oiii * genome.ha_g + qeB.oiii * genome.ha_b
-    let c3 = qeR.ha * genome.oiii_r + qeG.ha * genome.oiii_g + qeB.ha * genome.oiii_b
-    let c4 = qeR.oiii * genome.oiii_r + qeG.oiii * genome.oiii_g + qeB.oiii * genome.oiii_b - 1.0
-    in c1 * c1 + c2 * c2 + c3 * c3 + c4 * c4
+def fitness_one [l] (genome: Genome) (image: Image[l]) (qeR: QE) (qeG: QE) (qeB: QE) : f64 =
+    let {i, x} = genome
+    let (j, k) = j_k_from_i i qeR.ha qeG.ha qeB.ha qeR.oiii qeG.oiii qeB.oiii
+    let (y, z) = j_k_from_i x qeR.oiii qeG.oiii qeB.oiii qeR.ha qeG.ha qeB.ha
+    let h_noise = noise i j k image
+    let o_noise = noise x y z image
+    in h_noise + o_noise
 
-entry noise_fitness (genome: Genome) (image: Image[]) : f64 =
-    let ha = noise genome.ha_r genome.ha_g genome.ha_b image
-    let oiii = noise genome.oiii_r genome.oiii_g genome.oiii_b image
-    in ha + oiii
-
-def fitness_one [l] (genome: Genome) (image: Image[l]) (lambda: f64) (qeR: QE) (qeG: QE) (qeB: QE) : f64 =
-    let noise_fit = noise_fitness genome image
-    let constraint_fit = constraint_fitness genome qeR qeG qeB
-    in noise_fit + lambda * constraint_fit
-
-entry fitness [n][l] (genomes: GenomeList[n]) (image: Image[l]) (lambda: f64) (qeR: QE) (qeG: QE) (qeB: QE) : [n]f64 =
-    map (\genome -> fitness_one genome image lambda qeR qeG qeB) genomes
+entry fitness [n][l] (genomes: Genomes[n]) (image: Image[l]) (qeR: QE) (qeG: QE) (qeB: QE) : [n]f64 =
+    map (\genome -> fitness_one genome image qeR qeG qeB) genomes

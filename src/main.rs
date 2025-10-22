@@ -3,7 +3,7 @@ use crate::config::Camera;
 use crate::genetics::Genome;
 use crate::normal_distr::NormalDistribution;
 use fitrs::{Fits, FitsData, Hdu};
-use ndarray::{s, Array2, Array3, CowArray, Ix1};
+use ndarray::{s, Array2, Array3};
 use rand::{rng, Rng};
 use std::fs::File;
 use std::path::Path;
@@ -14,11 +14,10 @@ mod genetics;
 mod normal_distr;
 
 const POP_SIZE: usize = 100;
-const GENS: u32 = 500;
-const INITIAL_STD: f64 = 0.1;
-const DECAY_RATE: f64 = 0.01;
-const ELITISM: usize = 50;
-const LAMBDA: f64 = 1e2;
+const GENS: u32 = 250;
+const INITIAL_STD: f64 = 0.5;
+const DECAY_RATE: f64 = 0.1;
+const ELITISM: usize = 5;
 
 fn main() {
     let config = Path::new("config.json");
@@ -29,14 +28,20 @@ fn main() {
     let camera = &cameras[0];
     println!("Using camera: {:?}", camera);
 
-    let image = Fits::open("image_fake.fit").expect("Failed to open FITS file");
+    let image = Fits::open("image_real.fit").expect("Failed to open FITS file");
     let (shape, data) = match image.get(0).expect("No HDU found").read_data() {
         FitsData::Characters(_) => panic!("Did not expect character data"),
-        FitsData::IntegersI32(_) => panic!("Did not expect i32 data"),
-        FitsData::IntegersU32(_) => panic!("Did not expect u32 data"),
+        FitsData::IntegersI32(arr) => (
+            arr.shape,
+            arr.data.into_iter().map(|v| v.unwrap_or(0) as f64).collect(),
+        ),
+        FitsData::IntegersU32(arr) => (
+            arr.shape,
+            arr.data.into_iter().map(|v| v.unwrap_or(0) as f64).collect(),
+        ),
         FitsData::FloatingPoint32(arr) => (
             arr.shape,
-            arr.data.into_iter().map(|v| v as f64).collect::<Vec<f64>>(),
+            arr.data.into_iter().map(|v| v as f64).collect(),
         ),
         FitsData::FloatingPoint64(arr) => (arr.shape, arr.data),
     };
@@ -46,26 +51,46 @@ fn main() {
     let green_channel = channels.slice(s![1, .., ..]).into_owned();
     let blue_channel = channels.slice(s![2, .., ..]).into_owned();
 
-    let mut best_genome = optimized_genome(camera, &red_channel, &green_channel, &blue_channel);
-    if best_genome.ha_r < best_genome.oiii_r {
-        // H-alpha was mistaken for OIII; swap them
-        best_genome = Genome {
-            ha_r: best_genome.oiii_r,
-            ha_g: best_genome.oiii_g,
-            ha_b: best_genome.oiii_b,
-            oiii_r: best_genome.ha_r,
-            oiii_g: best_genome.ha_g,
-            oiii_b: best_genome.ha_b,
-        };
-        println!("H-alpha and OIII components were mixed up; swapped them.");
-    }
+    let context = Context::new_with_options(Options::new()).unwrap();
+    let best_genome = optimized_genome(
+        &context,
+        camera,
+        &red_channel,
+        &green_channel,
+        &blue_channel,
+    );
 
-    let h_alpha = best_genome.ha_r * &red_channel
-        + best_genome.ha_g * &green_channel
-        + best_genome.ha_b * &blue_channel;
-    let oiii = best_genome.oiii_r * &red_channel
-        + best_genome.oiii_g * &green_channel
-        + best_genome.oiii_b * &blue_channel;
+    let ha_r = best_genome.i;
+    let (ha_g, ha_b) = context.j_k_from_i(
+        ha_r,
+        camera.qe_red.ha,
+        camera.qe_green.ha,
+        camera.qe_blue.ha,
+        camera.qe_red.oiii,
+        camera.qe_green.oiii,
+        camera.qe_blue.oiii,
+    ).unwrap();
+    let h_alpha = ha_r * &red_channel
+        + ha_g * &green_channel
+        + ha_b * &blue_channel;
+
+    let oiii_r = best_genome.x;
+    let (oiii_g, oiii_b) = context.j_k_from_i(
+        oiii_r,
+        camera.qe_red.oiii,
+        camera.qe_green.oiii,
+        camera.qe_blue.oiii,
+        camera.qe_red.ha,
+        camera.qe_green.ha,
+        camera.qe_blue.ha,
+    ).unwrap();
+    let oiii = oiii_r * &red_channel
+        + oiii_g * &green_channel
+        + oiii_b * &blue_channel;
+
+    println!("Best genome results:");
+    println!("H-alpha coefficients: r = {}, g = {}, b = {}", ha_r, ha_g, ha_b);
+    println!("OIII coefficients: r = {}, g = {}, b = {}", oiii_r, oiii_g, oiii_b);
 
     let ha_hdu = Hdu::new(
         &[h_alpha.shape()[1], h_alpha.shape()[0]],
@@ -81,13 +106,12 @@ fn main() {
 }
 
 fn optimized_genome(
+    context: &Context,
     camera: &Camera,
     red: &Array2<f64>,
     green: &Array2<f64>,
     blue: &Array2<f64>,
 ) -> Genome {
-    let context = Context::new_with_options(Options::new()).unwrap();
-
     let image = context
         .new_image(
             &ArrayF64D1::new(
@@ -127,7 +151,6 @@ fn optimized_genome(
             .fitness(
                 &Genome::list_as_gpu_list(&context, &population),
                 &image,
-                LAMBDA,
                 &qe_red,
                 &qe_green,
                 &qe_blue,
@@ -160,42 +183,35 @@ fn optimized_genome(
                 population[idx2]
             };
             let child = Genome {
-                ha_r: parent.ha_r + rng.sample(NormalDistribution::new(0.0, mutation_rate)),
-                ha_g: parent.ha_g + rng.sample(NormalDistribution::new(0.0, mutation_rate)),
-                ha_b: parent.ha_b + rng.sample(NormalDistribution::new(0.0, mutation_rate)),
-                oiii_r: parent.oiii_r + rng.sample(NormalDistribution::new(0.0, mutation_rate)),
-                oiii_g: parent.oiii_g + rng.sample(NormalDistribution::new(0.0, mutation_rate)),
-                oiii_b: parent.oiii_b + rng.sample(NormalDistribution::new(0.0, mutation_rate)),
+                i: parent.i + rng.sample(NormalDistribution::new(0.0, mutation_rate)),
+                x: parent.x + rng.sample(NormalDistribution::new(0.0, mutation_rate)),
             };
             new_population.push(child);
         }
 
         population = new_population;
-        let (best_genome, best_fitness) = best_genome_and_fitness(&population, &fitnesses);
+        let (_, best_fitness) = best_genome_and_fitness(&population, &fitnesses);
         println!(
             r"
 Generation {}:
-    Best fitness = {}
     Noise = {}
         ",
-            gen,
-            best_fitness,
-            context
-                .noise_fitness(&best_genome.as_gpu_genome(&context), &image)
-                .unwrap()
+            gen, best_fitness
         );
     }
 
     let (best_genome, best_fitness) = best_genome_and_fitness(&population, &fitnesses);
     println!("Best genome found: {:?}", best_genome);
-    println!("Fitness: {}", best_fitness);
-    println!(
-        "Noise fitness: {}",
-        context
-            .noise_fitness(&best_genome.as_gpu_genome(&context), &image)
-            .unwrap()
-    );
-    best_genome
+    println!("Noise: {}", best_fitness);
+    if best_genome.i < best_genome.x {
+        println!("Warning: H-alpha component is less than OIII component; they may be swapped.");
+        Genome {
+            i: best_genome.x,
+            x: best_genome.i,
+        }
+    } else {
+        best_genome
+    }
 }
 
 fn best_genome_and_fitness(population: &Vec<Genome>, fitnesses: &Vec<f64>) -> (Genome, f64) {
