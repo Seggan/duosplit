@@ -22,6 +22,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+            futhark
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
       - name: Install OpenCL headers
         run: |
           if [[ "${{ matrix.os }}" == "ubuntu-latest" ]]; then
@@ -34,24 +44,12 @@ jobs:
 
       - name: Install Futhark
         run: |
-          if [[ "${{ matrix.os }}" == "ubuntu-latest" ]]; then
-          curl -L https://futhark-lang.org/releases/futhark-nightly-linux-x86_64.tar.xz -o futhark.tar.xz
-          tar -xf futhark.tar.xz
-          sudo mv futhark-nightly-linux-x86_64/futhark /usr/local/bin/
-          elif [[ "${{ matrix.os }}" == "windows-latest" ]]; then
-          curl -L -o futhark.zip https://futhark-lang.org/releases/futhark-nightly-windows-x86_64.zip
-          powershell -Command "Expand-Archive futhark.zip -DestinationPath ."
-          echo "$(pwd)/futhark-nightly-windows-x86_64" >> $GITHUB_PATH
-          fi
-
-      - name: Cache Cargo registry & target
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          curl --proto '=https' --tlsv1.2 -sSf https://get-ghcup.haskell.org | sh
+          git clone https://github.com/diku-dk/futhark.git
+          cd futhark
+          make configure
+          make build
+          make install
 
       - name: Set Rust target triple
         id: target
