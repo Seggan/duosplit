@@ -1,0 +1,101 @@
+name: Build & Release Rust Binaries
+
+on:
+  push:
+    tags:
+      - 'v*'
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        arch: [x86_64, aarch64]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Cache Cargo registry & target
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Install Rust
+        run: |
+          curl https://sh.rustup.rs -sSf | sh -s -- -y
+          source $HOME/.cargo/env
+          rustup default stable
+
+      - name: Set Rust target triple
+        id: target
+        run: |
+          case "${{ matrix.os }}_${{ matrix.arch }}" in
+            ubuntu-latest_x86_64)    echo "target_triple=x86_64-unknown-linux-gnu" >> $GITHUB_OUTPUT ;;
+            ubuntu-latest_aarch64)   echo "target_triple=aarch64-unknown-linux-gnu" >> $GITHUB_OUTPUT ;;
+            windows-latest_x86_64)   echo "target_triple=x86_64-pc-windows-msvc" >> $GITHUB_OUTPUT ;;
+            windows-latest_aarch64)  echo "target_triple=aarch64-pc-windows-msvc" >> $GITHUB_OUTPUT ;;
+            *) echo "Unsupported combination" ; exit 1 ;;
+          esac
+
+      - name: Add Rust target
+        run: rustup target add ${{ steps.target.outputs.target_triple }}
+
+      - name: Set version from tag
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          TAG_VERSION="${GITHUB_REF#refs/tags/}"
+          CLEAN_VERSION="${TAG_VERSION#v}" # strip leading 'v'
+          echo "Setting Cargo.toml version to $CLEAN_VERSION"
+          # Update version using sed (POSIX-safe)
+          sed -i.bak -E "s/^version = .*/version = \"${CLEAN_VERSION}\"/" Cargo.toml
+          rm -f Cargo.toml.bak
+
+      - name: Build release
+        env:
+          CARGO_TARGET_DIR: target/${{ matrix.os }}-${{ matrix.arch }}
+        run: cargo build --release --target ${{ steps.target.outputs.target_triple }}
+
+      - name: Package artifact
+        run: |
+          mkdir -p dist
+          target_dir="target/${{ matrix.os }}-${{ matrix.arch }}/${{ steps.target.outputs.target_triple }}/release"
+          BIN_NAME="your-binary-name"
+          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then BIN_NAME="${BIN_NAME}.exe"; fi
+          cp "$target_dir/$BIN_NAME" "dist/${BIN_NAME}-${{ matrix.os }}-${{ matrix.arch }}"
+          ls -lh dist/
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-${{ matrix.os }}-${{ matrix.arch }}
+          path: dist/
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - name: Download artifacts from all build jobs
+        uses: actions/download-artifact@v4
+        with:
+          path: dist/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Release ${{ github.ref_name }}
+          files: dist/**/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
