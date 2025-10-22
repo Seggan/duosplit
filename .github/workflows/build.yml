@@ -38,13 +38,15 @@ jobs:
             sudo apt-get update
             sudo apt-get install -y ocl-icd-opencl-dev
           elif [[ "${{ matrix.os }}" == "windows-latest" ]]; then
-            choco install opencl-headers -y || echo "No opencl-headers in choco, skipping"
+            choco install opencl-intel-cpu-runtime -y || echo "No opencl-headers in choco, skipping"
             # Windows usually already has the headers via SDK
           fi
 
+      - name: Install GHC for Futhark
+        uses: haskell-actions/setup@v2
+
       - name: Install Futhark
         run: |
-          curl --proto '=https' --tlsv1.2 -sSf https://get-ghcup.haskell.org | sh
           git clone https://github.com/diku-dk/futhark.git
           cd futhark
           make configure
