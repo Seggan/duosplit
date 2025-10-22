@@ -9,7 +9,8 @@ Due to MacOS being a super annoying platform to build for and I don't have a Mac
 You can build from source on MacOS using the instructions below.
 
 ## Building from Source
-Building duosplit requires [Rust](https://www.rust-lang.org/) and [Cargo](https://doc.rust-lang.org/cargo/getting-started/installation.html) to be installed.
+Building duosplit requires [Rust](https://www.rust-lang.org/) and [Cargo](https://doc.rust-lang.org/cargo/getting-started/installation.html) to be installed. It also requires the OpenCL headers
+and [Futhark](https://futhark-lang.org) to be installed and available in your system PATH.
 
 1. Clone the repository:
    ```bash
