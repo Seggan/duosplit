@@ -7,6 +7,21 @@
         },
         "qe_green": {
             "ha": 0.15,
+            "oiii": 0.92
+        },
+        "qe_blue": {
+            "ha": 0.04,
+            "oiii": 0.5
+        }
+    },
+    {
+        "name": "ASI2400MC",
+        "qe_red": {
+            "ha": 0.8,
+            "oiii": 0.03
+        },
+        "qe_green": {
+            "ha": 0.15,
             "oiii": 0.925
         },
         "qe_blue": {

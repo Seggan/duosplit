@@ -28,9 +28,12 @@ fn main() {
     let camera = &cameras[0];
     println!("Using camera: {:?}", camera);
 
-    let image = Fits::open("image_real.fit").expect("Failed to open FITS file");
+    let image = Fits::open("dub.fit").expect("Failed to open FITS file");
     let (shape, data) = match image.get(0).expect("No HDU found").read_data() {
-        FitsData::Characters(_) => panic!("Did not expect character data"),
+        FitsData::Characters(arr) => (
+            arr.shape,
+            arr.data.into_iter().map(|v| v as u64 as f64).collect(),
+        ),
         FitsData::IntegersI32(arr) => (
             arr.shape,
             arr.data.into_iter().map(|v| v.unwrap_or(0) as f64).collect(),
