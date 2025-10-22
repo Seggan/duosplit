@@ -11,5 +11,7 @@ ndarray = "0.16.1"
 
 clap = { version = "4.5.50", features = ["derive"] }
 
+cl3 = "0.13.1"
+
 [build-dependencies]
 futhark-bindgen = { version = "0.2.8", default-features = false, features = ["build"] }

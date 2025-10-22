@@ -27,4 +27,19 @@ pub struct Cli {
 
     #[arg(long = "qbo", help = "The quantum efficiency of the blue channel at the OIII wavelength (500.7 nm)")]
     pub blue_oiii_qe: f64,
+
+    #[arg(short, long, default_value_t = 100, help = "Population size for the genetic algorithm")]
+    pub population_size: usize,
+
+    #[arg(short, long, default_value_t = 250, help = "Number of generations for the genetic algorithm")]
+    pub generations: u32,
+
+    #[arg(short, long, default_value_t = 5, help = "Number of elite individuals to carry over each generation")]
+    pub elitism: usize,
+
+    #[arg(short = 's', long, default_value_t = 0.5, help = "Initial standard deviation for mutation")]
+    pub initial_std: f64,
+    
+    #[arg(short, long, default_value_t = 0.1, help = "Decay rate for mutation standard deviation")]
+    pub decay_rate: f64,
 }

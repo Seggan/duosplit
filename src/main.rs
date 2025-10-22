@@ -1,27 +1,66 @@
-use crate::bindings::{ArrayF64D1, Context, Options, QE};
+use crate::bindings::{ArrayF64D1, Context, Image, Options, QE};
 use crate::cli::Cli;
 use crate::genetics::Genome;
 use crate::normal_distr::NormalDistribution;
+use cl3::platform::get_platform_ids;
 use clap::Parser;
 use fitrs::{Fits, FitsData, Hdu};
 use ndarray::{s, Array2, Array3};
 use rand::{rng, Rng};
 use std::path::{Path, PathBuf};
 use std::process::exit;
+use cl3::command_queue::cl_device_id;
+use cl3::device::get_device_ids;
+use cl3::error_codes::error_text;
+use cl3::layer::CL_DEVICE_TYPE_ALL;
 
 mod bindings;
 mod cli;
 mod genetics;
 mod normal_distr;
 
-const POP_SIZE: usize = 100;
-const GENS: u32 = 250;
-const INITIAL_STD: f64 = 0.5;
-const DECAY_RATE: f64 = 0.1;
-const ELITISM: usize = 5;
-
 fn main() {
     let cli = Cli::parse();
+
+    println!("Checking OpenCL availability...");
+    match get_platform_ids() {
+        Ok(platforms) => {
+            if platforms.is_empty() {
+                eprintln!("No OpenCL platforms found. Please ensure that your system has OpenCL drivers installed.");
+                exit(1);
+            }
+            let mut found = false;
+            for platform in platforms {
+                match get_device_ids(platform, CL_DEVICE_TYPE_ALL) {
+                    Ok(device) => {
+                        if !device.is_empty() {
+                            println!("OpenCL platform found.");
+                            found = true;
+                            break;
+                        }
+                    }
+                    Err(err) => {
+                        eprintln!("Error getting OpenCL devices: {}", error_text(err));
+                        exit(1);
+                    }
+                }
+            }
+            if !found {
+                eprintln!("No OpenCL devices found on any platform. Please ensure that your system has OpenCL-compatible hardware and drivers installed.");
+                exit(1);
+            }
+        }
+        Err(err) => match err {
+            cl3::error_codes::CL_PLATFORM_NOT_FOUND_KHR => {
+                eprintln!("No OpenCL platforms found. Please ensure that your system has OpenCL drivers installed.");
+                exit(1);
+            }
+            _ => {
+                eprintln!("Error getting OpenCL platforms: {}", error_text(err));
+                exit(1);
+            }
+        }
+    }
 
     println!("Reading FITS file: {}", cli.input.display());
     let (red_channel, green_channel, blue_channel) = match read_fits(&cli.input) {
@@ -38,12 +77,34 @@ fn main() {
     let gpu_qe_green = QE::new(&context, cli.green_ha_qe, cli.green_oiii_qe).unwrap();
     let gpu_qe_blue = QE::new(&context, cli.blue_ha_qe, cli.blue_oiii_qe).unwrap();
 
+    let image = context
+        .new_image(
+            &ArrayF64D1::new(
+                &context,
+                [red_channel.len() as i64],
+                red_channel.flatten().as_slice().unwrap(),
+            )
+            .unwrap(),
+            &ArrayF64D1::new(
+                &context,
+                [green_channel.len() as i64],
+                green_channel.flatten().as_slice().unwrap(),
+            )
+            .unwrap(),
+            &ArrayF64D1::new(
+                &context,
+                [blue_channel.len() as i64],
+                blue_channel.flatten().as_slice().unwrap(),
+            )
+            .unwrap(),
+        )
+        .unwrap();
+
     println!("Starting genetic algorithm optimization...");
     let best_genome = optimized_genome(
+        &cli,
         &context,
-        &red_channel,
-        &green_channel,
-        &blue_channel,
+        image,
         gpu_qe_red,
         gpu_qe_green,
         gpu_qe_blue,
@@ -137,45 +198,21 @@ fn read_fits(path: &impl AsRef<Path>) -> Result<(Array2<f64>, Array2<f64>, Array
 }
 
 fn optimized_genome(
+    cli: &Cli,
     context: &Context,
-    red: &Array2<f64>,
-    green: &Array2<f64>,
-    blue: &Array2<f64>,
+    image: Image,
     qe_red: QE,
     qe_green: QE,
     qe_blue: QE,
 ) -> Genome {
-    let image = context
-        .new_image(
-            &ArrayF64D1::new(
-                &context,
-                [red.len() as i64],
-                red.flatten().as_slice().unwrap(),
-            )
-            .unwrap(),
-            &ArrayF64D1::new(
-                &context,
-                [green.len() as i64],
-                green.flatten().as_slice().unwrap(),
-            )
-            .unwrap(),
-            &ArrayF64D1::new(
-                &context,
-                [blue.len() as i64],
-                blue.flatten().as_slice().unwrap(),
-            )
-            .unwrap(),
-        )
-        .unwrap();
-
     let mut rng = rng();
-    let mut population = Vec::with_capacity(POP_SIZE);
-    for _ in 0..POP_SIZE {
+    let mut population = Vec::with_capacity(cli.population_size);
+    for _ in 0..cli.population_size {
         population.push(Genome::random(&mut rng));
     }
 
-    let mut fitnesses = vec![0.0; POP_SIZE];
-    for gen in 0..GENS {
+    let mut fitnesses = Vec::new();
+    for gen in 0..cli.generations {
         fitnesses = context
             .fitness(
                 &Genome::list_as_gpu_list(&context, &population),
@@ -189,9 +226,9 @@ fn optimized_genome(
             .unwrap();
 
         let elite_indices = {
-            let mut indices = (0..POP_SIZE).collect::<Vec<usize>>();
+            let mut indices = (0..cli.population_size).collect::<Vec<usize>>();
             indices.sort_by(|&i, &j| fitnesses[i].partial_cmp(&fitnesses[j]).unwrap());
-            indices[..ELITISM].to_vec()
+            indices[..cli.elitism].to_vec()
         };
         let elites = elite_indices
             .iter()
@@ -199,12 +236,12 @@ fn optimized_genome(
             .collect::<Vec<Genome>>();
 
         let mut new_population = elites.clone();
-        let mutation_rate = INITIAL_STD * (-DECAY_RATE * gen as f64).exp();
-        while new_population.len() < POP_SIZE {
-            let idx1 = rng.random_range(0..POP_SIZE);
-            let mut idx2 = rng.random_range(0..POP_SIZE);
+        let mutation_rate = cli.initial_std * (-cli.decay_rate * gen as f64).exp();
+        while new_population.len() < cli.population_size {
+            let idx1 = rng.random_range(0..cli.population_size);
+            let mut idx2 = rng.random_range(0..cli.population_size);
             while idx2 == idx1 {
-                idx2 = rng.random_range(0..POP_SIZE);
+                idx2 = rng.random_range(0..cli.population_size);
             }
             let parent = if fitnesses[idx1] < fitnesses[idx2] {
                 population[idx1]
