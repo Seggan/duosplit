@@ -51,7 +51,7 @@ jobs:
           cd futhark
           make configure
           make build
-          make install
+          echo '$(dirname "$(cabal -v0 list-bin exe:futhark)")' >> $GITHUB_PATH
 
       - name: Set Rust target triple
         id: target
@@ -82,7 +82,7 @@ jobs:
       - name: Build release
         env:
           CARGO_TARGET_DIR: target/${{ matrix.os }}-${{ matrix.arch }}
-        run: cargo build --release
+        run: cargo build --release -Awarnings
 
       - name: Package artifact
         run: |
