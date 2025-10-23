@@ -22,15 +22,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Cache
+      - name: Cache Cargo
         uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
             target
-            futhark
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Cache Futhark build
+        uses: actions/cache@v4
+        with:
+          path: futhark
+          key: ${{ runner.os }}-futhark-${{ hashFiles('**/futhark/**') }}
 
       - name: Install OpenCL headers
         run: |
@@ -82,7 +87,7 @@ jobs:
       - name: Build release
         env:
           CARGO_TARGET_DIR: target/${{ matrix.os }}-${{ matrix.arch }}
-        run: cargo build --release -Awarnings
+        run: RUSTFLAGS=-Awarnings cargo build --release
 
       - name: Package artifact
         run: |
