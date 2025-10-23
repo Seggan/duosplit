@@ -29,28 +29,8 @@ jobs:
             echo "CFLAGS=-I${{ github.workspace }}\vcpkg\installed\x64-windows\include" >> $env:GITHUB_ENV
           fi
 
-      - name: Cache Futhark build
-        uses: actions/cache@v4
-        with:
-          path: |
-            futhark
-            ~/.cabal/packages
-            ~/.cabal/store
-            dist-newstyle
-          key: ${{ runner.os }}-${{ runner.arch }}-futhark
-
       - name: Install GHC for Futhark
         uses: haskell-actions/setup@v2
-
-      - name: Install Futhark
-        run: |
-          if [ ! -d "futhark" ]; then
-            git clone https://github.com/diku-dk/futhark.git
-          fi
-          cd futhark
-          make configure
-          make build
-          echo $(dirname "$(cabal -v0 list-bin exe:futhark)") >> $GITHUB_PATH
 
       - name: Set Rust target triple
         id: target
@@ -70,6 +50,26 @@ jobs:
 
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Cache Futhark build
+        uses: actions/cache@v4
+        with:
+          path: |
+            futhark
+            ~/.cabal/packages
+            ~/.cabal/store
+            dist-newstyle
+          key: ${{ runner.os }}-${{ runner.arch }}-futhark
+
+      - name: Install Futhark
+        run: |
+          if [ ! -d "futhark" ]; then
+            git clone https://github.com/diku-dk/futhark.git
+          fi
+          cd futhark
+          make configure
+          make build
+          echo $(dirname "$(cabal -v0 list-bin exe:futhark)") >> $GITHUB_PATH
 
       - name: Cache Cargo
         uses: actions/cache@v4

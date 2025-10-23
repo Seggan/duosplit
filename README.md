@@ -1,7 +1,7 @@
 # duosplit
 
 A tool for accurately splitting hydrogen-alpha and oxygen-III images from dual narrowband astrophotography captures.
-Based on the math provided (and explained) to me by Corvusmellori on the Astrophotography & Co. Discord.
+Based on the math provided (and explained) to me by Raven LaRue.
 
 ## Downloads
 Windows and Linux binaries are available on the [releases page](https://github.com/Seggan/duosplit/releases).
