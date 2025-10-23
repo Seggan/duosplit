@@ -14,6 +14,9 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest]
         arch: [x86_64, aarch64]
+        exclude:
+          - os: windows-latest
+            arch: aarch64
     runs-on: ${{ matrix.os }}
     defaults:
       run:
@@ -104,7 +107,32 @@ jobs:
           sed -i.bak -E "s/^version = .*/version = \"${CLEAN_VERSION}\"/" Cargo.toml
           rm -f Cargo.toml.bak
 
-      
+      - name: Build release
+        env:
+          CARGO_TARGET_DIR: target/${{ matrix.os }}-${{ matrix.arch }}
+        run: CC=clang RUSTFLAGS=-Awarnings cargo build --release -vv --target ${{ steps.target.outputs.target_triple }}
+
+      - name: Package artifact
+        run: |
+          mkdir -p dist
+          target_dir="target/${{ matrix.os }}-${{ matrix.arch }}/release"
+          BIN_NAME="duosplit"
+          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then BIN_NAME="${BIN_NAME}.exe"; fi
+          cp "$target_dir/$BIN_NAME" "dist/${BIN_NAME}-${{ matrix.os }}-${{ matrix.arch }}"
+          ls -lh dist/
+
+      - name: Breakpoint if failed
+        if: failure()
+        uses: namespacelabs/breakpoint-action@v0
+        with:
+          duration: 30m
+          authorized-users: Seggan
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-${{ matrix.os }}-${{ matrix.arch }}
+          path: dist/
 
   release:
     needs: build
