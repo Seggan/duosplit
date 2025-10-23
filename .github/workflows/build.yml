@@ -30,8 +30,13 @@ jobs:
             echo "C:\vcpkg\installed\x64-windows\lib" >> $GITHUB_PATH
             setx INCLUDE "C:\vcpkg\installed\x64-windows\include;%INCLUDE%"
             setx LIB "C:\vcpkg\installed\x64-windows\lib;%LIB%"
-            tree "C:\vcpkg\installed\x64-windows\include"
           fi
+
+      - name: Debug
+        run: |
+          echo $INCLUDE
+          echo $LIB
+          ls "C:\vcpkg\installed\x64-windows\include"
 
       - name: Install GHC for Futhark
         uses: haskell-actions/setup@v2
