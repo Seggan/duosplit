@@ -100,7 +100,7 @@ jobs:
         run: |
           mkdir -p dist
           target_dir="target/release"
-          BIN_NAME="your-binary-name"
+          BIN_NAME="duosplit"
           if [[ "${{ matrix.os }}" == "windows-latest" ]]; then BIN_NAME="${BIN_NAME}.exe"; fi
           cp "$target_dir/$BIN_NAME" "dist/${BIN_NAME}-${{ matrix.os }}-${{ matrix.arch }}"
           ls -lh dist/
