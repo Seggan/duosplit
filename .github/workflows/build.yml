@@ -19,6 +19,11 @@ jobs:
       run:
         shell: bash
     steps:
+      - name: Setup MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: ${{ matrix.arch }}
+
       - name: Install OpenCL headers
         run: |
           if [[ "${{ matrix.os }}" == "ubuntu-latest" ]]; then
