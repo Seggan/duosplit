@@ -28,8 +28,8 @@ jobs:
             vcpkg install opencl
             echo "C:\vcpkg\installed\x64-windows\include" >> $GITHUB_PATH
             echo "C:\vcpkg\installed\x64-windows\lib" >> $GITHUB_PATH
-            echo 'INCLUDE="C:\vcpkg\installed\x64-windows\include;$INCLUDE"' >> $GITHUB_ENV
-            echo 'LIB="C:\vcpkg\installed\x64-windows\lib;$LIB"' >> $GITHUB_ENV
+            echo "INCLUDE=C:\\vcpkg\\installed\\x64-windows\\include;$INCLUDE" >> $GITHUB_ENV
+            echo "LIB=C:\\vcpkg\\installed\\x64-windows\\lib;$LIB" >> $GITHUB_ENV
           fi
 
       - name: Debug
