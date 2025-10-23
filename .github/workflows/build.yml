@@ -89,7 +89,7 @@ jobs:
       - name: Build release
         env:
           CARGO_TARGET_DIR: target/${{ matrix.os }}-${{ matrix.arch }}
-        run: RUSTFLAGS=-Awarnings cargo build --release
+        run: RUSTFLAGS=-Awarnings cargo build --release -vv
 
       - name: Package artifact
         run: |
