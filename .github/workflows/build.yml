@@ -89,6 +89,13 @@ jobs:
           CARGO_TARGET_DIR: target/${{ matrix.os }}-${{ matrix.arch }}
         run: RUSTFLAGS=-Awarnings cargo build --release
 
+      - name: Breakpoint if failed
+        if: failure()
+        uses: namespacelabs/breakpoint-action@v0
+        with:
+          duration: 30m
+          authorized-users: Seggan
+
       - name: Package artifact
         run: |
           mkdir -p dist
