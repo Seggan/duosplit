@@ -35,7 +35,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: futhark
-          key: ${{ runner.os }}-futhark-${{ hashFiles('**/futhark/**') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-futhark
 
       - name: Install OpenCL headers
         run: |
@@ -52,7 +52,9 @@ jobs:
 
       - name: Install Futhark
         run: |
-          git clone https://github.com/diku-dk/futhark.git
+          if [ ! -d "futhark" ]; then
+            git clone https://github.com/diku-dk/futhark.git
+          fi
           cd futhark
           make configure
           make build
@@ -92,11 +94,7 @@ jobs:
       - name: Package artifact
         run: |
           mkdir -p dist
-          if [[ ${{ matrix.os }} == "windows-latest" ]]; then
-            target_dir="target\\${{ matrix.os }}-${{ matrix.arch }}\\release"
-          else
-            target_dir="target/${{ matrix.os }}-${{ matrix.arch }}/release"
-          fi
+          target_dir="target/${{ matrix.os }}-${{ matrix.arch }}/release"
           BIN_NAME="duosplit"
           if [[ "${{ matrix.os }}" == "windows-latest" ]]; then BIN_NAME="${BIN_NAME}.exe"; fi
           cp "$target_dir/$BIN_NAME" "dist/${BIN_NAME}-${{ matrix.os }}-${{ matrix.arch }}"
