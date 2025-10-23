@@ -28,15 +28,14 @@ jobs:
             vcpkg install opencl
             echo "C:\vcpkg\installed\x64-windows\include" >> $GITHUB_PATH
             echo "C:\vcpkg\installed\x64-windows\lib" >> $GITHUB_PATH
-            setx INCLUDE "C:\vcpkg\installed\x64-windows\include;%INCLUDE%"
-            setx LIB "C:\vcpkg\installed\x64-windows\lib;%LIB%"
+            echo 'INCLUDE="C:\vcpkg\installed\x64-windows\include;%INCLUDE%"' >> $GITHUB_ENV
+            echo 'LIB="C:\vcpkg\installed\x64-windows\lib;%LIB%"' >> $GITHUB_ENV
           fi
 
       - name: Debug
         run: |
           echo $INCLUDE
           echo $LIB
-          ls "C:\vcpkg\installed\x64-windows\include"
 
       - name: Install GHC for Futhark
         uses: haskell-actions/setup@v2
