@@ -56,7 +56,7 @@ jobs:
           cd futhark
           make configure
           make build
-          echo '$(dirname "$(cabal -v0 list-bin exe:futhark)")' >> $GITHUB_PATH
+          echo $(dirname "$(cabal -v0 list-bin exe:futhark)") >> $GITHUB_PATH
 
       - name: Set Rust target triple
         id: target
