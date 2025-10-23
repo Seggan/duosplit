@@ -89,21 +89,25 @@ jobs:
           CARGO_TARGET_DIR: target/${{ matrix.os }}-${{ matrix.arch }}
         run: RUSTFLAGS=-Awarnings cargo build --release
 
+      - name: Package artifact
+        run: |
+          mkdir -p dist
+          if [[ ${{ matrix.os }} == "windows-latest" ]]; then
+            target_dir="target\\${{ matrix.os }}-${{ matrix.arch }}\\release"
+          else
+            target_dir="target/${{ matrix.os }}-${{ matrix.arch }}/release"
+          fi
+          BIN_NAME="duosplit"
+          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then BIN_NAME="${BIN_NAME}.exe"; fi
+          cp "$target_dir/$BIN_NAME" "dist/${BIN_NAME}-${{ matrix.os }}-${{ matrix.arch }}"
+          ls -lh dist/
+
       - name: Breakpoint if failed
         if: failure()
         uses: namespacelabs/breakpoint-action@v0
         with:
           duration: 30m
           authorized-users: Seggan
-
-      - name: Package artifact
-        run: |
-          mkdir -p dist
-          target_dir="target/release"
-          BIN_NAME="duosplit"
-          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then BIN_NAME="${BIN_NAME}.exe"; fi
-          cp "$target_dir/$BIN_NAME" "dist/${BIN_NAME}-${{ matrix.os }}-${{ matrix.arch }}"
-          ls -lh dist/
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
