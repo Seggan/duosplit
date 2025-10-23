@@ -26,7 +26,10 @@ jobs:
             sudo apt-get install -y ocl-icd-opencl-dev
           elif [[ "${{ matrix.os }}" == "windows-latest" ]]; then
             vcpkg install opencl
-            echo "CFLAGS=-I${{ github.workspace }}\vcpkg\installed\x64-windows\include" >> $env:GITHUB_ENV
+            echo "C:\vcpkg\installed\x64-windows\include" >> $GITHUB_PATH
+            echo "C:\vcpkg\installed\x64-windows\lib" >> $GITHUB_PATH
+            setx INCLUDE "C:\vcpkg\installed\x64-windows\include;%INCLUDE%"
+            setx LIB "C:\vcpkg\installed\x64-windows\lib;%LIB%"
           fi
 
       - name: Install GHC for Futhark
@@ -53,6 +56,7 @@ jobs:
 
       - name: Cache Futhark build
         uses: actions/cache@v4
+        if: always()
         with:
           path: |
             futhark
