@@ -2,13 +2,7 @@ use crate::genetics::Genome;
 use bytemuck::{Pod, Zeroable};
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
 use wgpu::wgt::PollType;
-use wgpu::{
-    BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor,
-    BindGroupLayoutEntry, BindingType, BufferBindingType, BufferUsages, CommandEncoderDescriptor,
-    ComputePassDescriptor, ComputePipeline, ComputePipelineDescriptor, Device, DeviceDescriptor,
-    Instance, MapMode, PipelineLayoutDescriptor, Queue, RequestAdapterOptions, ShaderModule,
-    ShaderModuleDescriptor, ShaderSource, ShaderStages,
-};
+use wgpu::{Backends, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingType, BufferBindingType, BufferUsages, CommandEncoderDescriptor, ComputePassDescriptor, ComputePipeline, ComputePipelineDescriptor, Device, DeviceDescriptor, Instance, InstanceDescriptor, MapMode, PipelineLayoutDescriptor, Queue, RequestAdapterOptions, ShaderModule, ShaderModuleDescriptor, ShaderSource, ShaderStages};
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Pod, Zeroable)]
@@ -17,30 +11,24 @@ pub struct QEUniform {
     pub oiii: f32,
 }
 
-#[repr(C)]
-#[derive(Debug, Copy, Clone, Pod, Zeroable)]
-pub struct PixelUniform {
-    pub r: f32,
-    pub g: f32,
-    pub b: f32,
-}
-
 pub struct GpuContext {
     device: Device,
     queue: Queue,
     pipeline: ComputePipeline,
     layout: BindGroupLayout,
-    alg_shader: ShaderModule,
-    image: Vec<PixelUniform>,
+    image: Vec<[f32; 3]>,
     quantum_efficiencies: (QEUniform, QEUniform, QEUniform),
 }
 
 impl GpuContext {
     pub async fn new(
-        image: Vec<PixelUniform>,
+        image: Vec<[f32; 3]>,
         quantum_efficiencies: (QEUniform, QEUniform, QEUniform),
     ) -> Self {
-        let instance = Instance::default();
+        let instance = Instance::new(&InstanceDescriptor {
+            backends: Backends::GL,
+            ..InstanceDescriptor::default()
+        });
         let adapter = instance
             .request_adapter(&RequestAdapterOptions::default())
             .await
@@ -142,7 +130,6 @@ impl GpuContext {
         Self {
             device,
             queue,
-            alg_shader,
             layout,
             pipeline,
             image,

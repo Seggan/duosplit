@@ -24,12 +24,6 @@ struct QE {
     oiii: f32
 };
 
-struct Pixel {
-    r: f32,
-    g: f32,
-    b: f32
-}
-
 struct Genome {
     i: f32,
     x: f32
@@ -37,19 +31,19 @@ struct Genome {
 
 @group(0) @binding(0) var<storage, read> genomes: array<Genome>;
 @group(0) @binding(1) var<storage, read_write> fitness: array<f32>;
-@group(0) @binding(2) var<storage, read> image: array<Pixel>;
+@group(0) @binding(2) var<storage, read> image: array<vec3f>;
 @group(0) @binding(3) var<uniform> qeR: QE;
 @group(0) @binding(4) var<uniform> qeG: QE;
 @group(0) @binding(5) var<uniform> qeB: QE;
 
-fn j_k_from_i(i: f32, a: f32, c: f32, e: f32, b: f32, d: f32, f: f32) -> vec2<f32> {
+fn j_k_from_i(i: f32, a: f32, c: f32, e: f32, b: f32, d: f32, f: f32) -> vec2f {
     let denom = d * e - c * f;
     let j = (d + b * c * i - a * d * i) / denom;
     let k = (-f - b * e * i + a * f * i) / denom;
-    return vec2<f32>(j, k);
+    return vec2f(j, k);
 }
 
-fn pixel_noise(a: f32, b: f32, c: f32, pixel: Pixel) -> f32 {
+fn pixel_noise(a: f32, b: f32, c: f32, pixel: vec3f) -> f32 {
     return a * a * pixel.r + b * b * pixel.g + c * c * pixel.b;
 }
 
@@ -70,7 +64,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         let h = pixel_noise(genome.i, jk.x, jk.y, pixel);
         let o = pixel_noise(genome.x, yz.x, yz.y, pixel);
 
-        fitness_value += h + o;
+        fitness_value += h * h + o * o;
     }
     fitness[genome_idx] = fitness_value / f32(arrayLength(&image));
 }

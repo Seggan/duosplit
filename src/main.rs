@@ -1,6 +1,6 @@
 use crate::cli::Cli;
 use crate::genetics::{j_k_from_i, Genome};
-use crate::gpu::{GpuContext, PixelUniform, QEUniform};
+use crate::gpu::{GpuContext, QEUniform};
 use crate::normal_distr::NormalDistribution;
 use clap::Parser;
 use fitrs::{Fits, FitsData, Hdu};
@@ -33,11 +33,7 @@ async fn main() {
     let flat_green = green_channel.flatten();
     let flat_blue = blue_channel.flatten();
     for i in 0..flat_red.len() {
-        pixels.push(PixelUniform {
-            r: flat_red[i],
-            g: flat_green[i],
-            b: flat_blue[i],
-        });
+        pixels.push([flat_red[i], flat_green[i], flat_blue[i]]);
     }
 
     let qe_red = QEUniform {
