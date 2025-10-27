@@ -42,4 +42,7 @@ pub struct Cli {
     
     #[arg(short, long, default_value_t = 0.1, help = "Decay rate for mutation standard deviation")]
     pub decay_rate: f32,
+
+    #[arg(short, long, action)]
+    pub timings: bool
 }

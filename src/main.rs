@@ -8,6 +8,7 @@ use ndarray::{s, Array2, Array3};
 use rand::{rng, Rng};
 use std::path::{Path, PathBuf};
 use std::process::exit;
+use std::time::Instant;
 
 mod cli;
 mod genetics;
@@ -48,7 +49,7 @@ async fn main() {
         ha: cli.blue_ha_qe,
         oiii: cli.blue_oiii_qe,
     };
-    let context = GpuContext::new(pixels, (qe_red, qe_green, qe_blue)).await;
+    let context = GpuContext::new(pixels, 2048, (qe_red, qe_green, qe_blue)).await;
 
     println!("Starting genetic algorithm optimization...");
     let best_genome = optimized_genome(&cli, context).await;
@@ -148,6 +149,7 @@ async fn optimized_genome(cli: &Cli, context: GpuContext) -> Genome {
 
     let mut fitnesses = Vec::new();
     for gen in 0..cli.generations {
+        let start = Instant::now();
         fitnesses = context.compute_fitness(&population).await;
 
         let elite_indices = {
@@ -183,6 +185,10 @@ async fn optimized_genome(cli: &Cli, context: GpuContext) -> Genome {
         population = new_population;
         let (_, best_fitness) = best_genome_and_fitness(&population, &fitnesses);
         println!("Generation {}: {}", gen, best_fitness);
+        if cli.timings {
+            let duration = Instant::now() - start;
+            println!("Generation {} took {:?}", gen, duration);
+        }
     }
 
     let (best_genome, best_fitness) = best_genome_and_fitness(&population, &fitnesses);

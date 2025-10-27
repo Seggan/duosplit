@@ -35,6 +35,7 @@ struct Genome {
 @group(0) @binding(3) var<uniform> qeR: QE;
 @group(0) @binding(4) var<uniform> qeG: QE;
 @group(0) @binding(5) var<uniform> qeB: QE;
+@group(0) @binding(6) var<uniform> total_chunks: u32;
 
 fn j_k_from_i(i: f32, a: f32, c: f32, e: f32, b: f32, d: f32, f: f32) -> vec2f {
     let denom = d * e - c * f;
@@ -47,16 +48,18 @@ fn pixel_noise(a: f32, b: f32, c: f32, pixel: vec3f) -> f32 {
     return a * a * pixel.r + b * b * pixel.g + c * c * pixel.b;
 }
 
-@compute @workgroup_size(64)
+@compute @workgroup_size(4, 64)
 fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     let genome_idx = gid.x;
-    if (genome_idx >= arrayLength(&genomes)) {
+    let chunk = gid.y;
+    if (genome_idx >= arrayLength(&genomes) || chunk >= total_chunks) {
         return;
     }
     let genome = genomes[genome_idx];
 
+    let chunk_size = (arrayLength(&image) + total_chunks - 1u) / total_chunks;
     var fitness_value: f32 = 0.0;
-    for (var idx: u32 = 0u; idx < arrayLength(&image); idx = idx + 1u) {
+    for (var idx: u32 = chunk * chunk_size; idx < (chunk + 1u) * chunk_size && idx < arrayLength(&image); idx = idx + 1u) {
         let pixel = image[idx];
         let jk = j_k_from_i(genome.i, qeR.ha, qeG.ha, qeB.ha, qeR.oiii, qeG.oiii, qeB.oiii);
         let yz = j_k_from_i(genome.x, qeR.oiii, qeG.oiii, qeB.oiii, qeR.ha, qeG.ha, qeB.ha);
@@ -66,5 +69,5 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
 
         fitness_value += h * h + o * o;
     }
-    fitness[genome_idx] = fitness_value / f32(arrayLength(&image));
+    fitness[genome_idx * total_chunks + chunk] = fitness_value;
 }

@@ -2,7 +2,13 @@ use crate::genetics::Genome;
 use bytemuck::{Pod, Zeroable};
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
 use wgpu::wgt::PollType;
-use wgpu::{Backends, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingType, BufferBindingType, BufferUsages, CommandEncoderDescriptor, ComputePassDescriptor, ComputePipeline, ComputePipelineDescriptor, Device, DeviceDescriptor, Instance, InstanceDescriptor, MapMode, PipelineLayoutDescriptor, Queue, RequestAdapterOptions, ShaderModule, ShaderModuleDescriptor, ShaderSource, ShaderStages};
+use wgpu::{
+    Backends, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor,
+    BindGroupLayoutEntry, BindingType, Buffer, BufferBindingType, BufferUsages,
+    CommandEncoderDescriptor, ComputePassDescriptor, ComputePipeline, ComputePipelineDescriptor,
+    Device, DeviceDescriptor, Instance, InstanceDescriptor, MapMode, PipelineLayoutDescriptor,
+    Queue, RequestAdapterOptions, ShaderModule, ShaderModuleDescriptor, ShaderSource, ShaderStages,
+};
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Pod, Zeroable)]
@@ -16,19 +22,19 @@ pub struct GpuContext {
     queue: Queue,
     pipeline: ComputePipeline,
     layout: BindGroupLayout,
-    image: Vec<[f32; 3]>,
-    quantum_efficiencies: (QEUniform, QEUniform, QEUniform),
+    image_buffer: Buffer,
+    chunks: usize,
+    image_len: usize,
+    quantum_efficiencies: (Buffer, Buffer, Buffer),
 }
 
 impl GpuContext {
     pub async fn new(
         image: Vec<[f32; 3]>,
+        chunks: usize,
         quantum_efficiencies: (QEUniform, QEUniform, QEUniform),
     ) -> Self {
-        let instance = Instance::new(&InstanceDescriptor {
-            backends: Backends::GL,
-            ..InstanceDescriptor::default()
-        });
+        let instance = Instance::new(&InstanceDescriptor::from_env_or_default());
         let adapter = instance
             .request_adapter(&RequestAdapterOptions::default())
             .await
@@ -109,6 +115,17 @@ impl GpuContext {
                     },
                     count: None,
                 },
+                // Slice and slices
+                BindGroupLayoutEntry {
+                    binding: 6,
+                    visibility: ShaderStages::COMPUTE,
+                    ty: BindingType::Buffer {
+                        ty: BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
             ],
         });
 
@@ -127,13 +144,39 @@ impl GpuContext {
             cache: None,
         });
 
+        let image_buffer = device.create_buffer_init(&BufferInitDescriptor {
+            label: Some("Image Buffer"),
+            contents: bytemuck::cast_slice(&image),
+            usage: BufferUsages::STORAGE,
+        });
+
+        let qe_red_buffer = device.create_buffer_init(&BufferInitDescriptor {
+            label: Some("QE Red Buffer"),
+            contents: bytemuck::bytes_of(&quantum_efficiencies.0),
+            usage: BufferUsages::UNIFORM,
+        });
+
+        let qe_green_buffer = device.create_buffer_init(&BufferInitDescriptor {
+            label: Some("QE Green Buffer"),
+            contents: bytemuck::bytes_of(&quantum_efficiencies.1),
+            usage: BufferUsages::UNIFORM,
+        });
+
+        let qe_blue_buffer = device.create_buffer_init(&BufferInitDescriptor {
+            label: Some("QE Blue Buffer"),
+            contents: bytemuck::bytes_of(&quantum_efficiencies.2),
+            usage: BufferUsages::UNIFORM,
+        });
+
         Self {
             device,
             queue,
             layout,
             pipeline,
-            image,
-            quantum_efficiencies,
+            image_buffer,
+            chunks,
+            image_len: image.len(),
+            quantum_efficiencies: (qe_red_buffer, qe_green_buffer, qe_blue_buffer),
         }
     }
 
@@ -144,7 +187,7 @@ impl GpuContext {
             usage: BufferUsages::STORAGE,
         });
 
-        let fitness = vec![0.0f32; genomes.len()];
+        let fitness = vec![0.0f32; genomes.len() * self.chunks];
         let fitness_buffer = self.device.create_buffer_init(&BufferInitDescriptor {
             label: Some("Fitness Buffer"),
             contents: bytemuck::cast_slice(&fitness),
@@ -157,27 +200,9 @@ impl GpuContext {
             usage: BufferUsages::MAP_READ | BufferUsages::COPY_DST,
         });
 
-        let image_buffer = self.device.create_buffer_init(&BufferInitDescriptor {
-            label: Some("Image Buffer"),
-            contents: bytemuck::cast_slice(&self.image),
-            usage: BufferUsages::STORAGE,
-        });
-
-        let qe_red_buffer = self.device.create_buffer_init(&BufferInitDescriptor {
-            label: Some("QE Red Buffer"),
-            contents: bytemuck::bytes_of(&self.quantum_efficiencies.0),
-            usage: BufferUsages::UNIFORM,
-        });
-
-        let qe_green_buffer = self.device.create_buffer_init(&BufferInitDescriptor {
-            label: Some("QE Green Buffer"),
-            contents: bytemuck::bytes_of(&self.quantum_efficiencies.1),
-            usage: BufferUsages::UNIFORM,
-        });
-
-        let qe_blue_buffer = self.device.create_buffer_init(&BufferInitDescriptor {
-            label: Some("QE Blue Buffer"),
-            contents: bytemuck::bytes_of(&self.quantum_efficiencies.2),
+        let chunks_buffer = self.device.create_buffer_init(&BufferInitDescriptor {
+            label: Some("Chunks Buffer"),
+            contents: bytemuck::bytes_of(&(self.chunks as u32)),
             usage: BufferUsages::UNIFORM,
         });
 
@@ -194,19 +219,23 @@ impl GpuContext {
                 },
                 BindGroupEntry {
                     binding: 2,
-                    resource: image_buffer.as_entire_binding(),
+                    resource: self.image_buffer.as_entire_binding(),
                 },
                 BindGroupEntry {
                     binding: 3,
-                    resource: qe_red_buffer.as_entire_binding(),
+                    resource: self.quantum_efficiencies.0.as_entire_binding(),
                 },
                 BindGroupEntry {
                     binding: 4,
-                    resource: qe_green_buffer.as_entire_binding(),
+                    resource: self.quantum_efficiencies.1.as_entire_binding(),
                 },
                 BindGroupEntry {
                     binding: 5,
-                    resource: qe_blue_buffer.as_entire_binding(),
+                    resource: self.quantum_efficiencies.2.as_entire_binding(),
+                },
+                BindGroupEntry {
+                    binding: 6,
+                    resource: chunks_buffer.as_entire_binding(),
                 },
             ],
             label: None,
@@ -222,8 +251,9 @@ impl GpuContext {
             });
             cpass.set_pipeline(&self.pipeline);
             cpass.set_bind_group(0, &bind_group, &[]);
-            let workgroup_count = ((genomes.len() as f32) / 64.0).ceil() as u32;
-            cpass.dispatch_workgroups(workgroup_count, 1, 1);
+            let workgroup_count_x = ((genomes.len() as f32) / 4.0).ceil() as u32;
+            let workgroup_count_y = ((self.chunks as f32) / 64.0).ceil() as u32;
+            cpass.dispatch_workgroups(workgroup_count_x, workgroup_count_y, 1);
         }
 
         encoder.copy_buffer_to_buffer(
@@ -246,14 +276,19 @@ impl GpuContext {
             })
             .unwrap();
 
-        if let Ok(Ok(())) = recv.recv_async().await {
-            let data = buffer_slice.get_mapped_range();
-            let result = bytemuck::cast_slice(&data).to_vec();
-            drop(data);
-            fitness_staging_buffer.unmap();
-            result
-        } else {
-            panic!("Failed to run compute on GPU")
-        }
+        recv.recv_async()
+            .await
+            .expect("Failed to receive map result")
+            .expect("Failed to map buffer");
+
+        let data = buffer_slice.get_mapped_range();
+        let result = bytemuck::cast_slice(&data).to_vec();
+        drop(data);
+        fitness_staging_buffer.unmap();
+
+        result
+            .chunks(self.chunks)
+            .map(|chunk| chunk.iter().sum::<f32>() / (self.image_len as f32))
+            .collect()
     }
 }
