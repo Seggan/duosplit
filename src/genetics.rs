@@ -1,11 +1,11 @@
-use crate::bindings;
-use crate::bindings::{Context, Genomes};
+use bytemuck::{Pod, Zeroable};
 use rand::Rng;
 
-#[derive(Debug, Copy, Clone)]
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Pod, Zeroable)]
 pub struct Genome {
-    pub i: f64,
-    pub x: f64,
+    pub i: f32,
+    pub x: f32,
 }
 
 impl Genome {
@@ -15,20 +15,11 @@ impl Genome {
             x: rng.random_range(-1.0..1.0)
         }
     }
+}
 
-    pub fn list_as_gpu_list<'a>(context: &'a Context, list: &Vec<Genome>) -> Genomes<'a> {
-        let mut genomes = context.new_genomes().unwrap();
-        for genome in list {
-            genomes = context.add_genome(&genomes, &genome.as_gpu_genome(context)).unwrap();
-        }
-        genomes
-    }
-
-    pub fn as_gpu_genome(self, context: &Context) -> bindings::Genome {
-        bindings::Genome::new(
-            context,
-            self.i,
-            self.x,
-        ).unwrap()
-    }
+pub fn j_k_from_i(i: f32, a: f32, c: f32, e: f32, b: f32, d: f32, f: f32) -> (f32, f32) {
+    let denom = d * e - c * f;
+    let j = (d + b * c * i - a * d * i) / denom;
+    let k = (-f - b * e * i + a * f * i) / denom;
+    (j, k)
 }
