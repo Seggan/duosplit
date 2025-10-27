@@ -3,11 +3,11 @@ use bytemuck::{Pod, Zeroable};
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
 use wgpu::wgt::PollType;
 use wgpu::{
-    Backends, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor,
+    BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor,
     BindGroupLayoutEntry, BindingType, Buffer, BufferBindingType, BufferUsages,
     CommandEncoderDescriptor, ComputePassDescriptor, ComputePipeline, ComputePipelineDescriptor,
     Device, DeviceDescriptor, Instance, InstanceDescriptor, MapMode, PipelineLayoutDescriptor,
-    Queue, RequestAdapterOptions, ShaderModule, ShaderModuleDescriptor, ShaderSource, ShaderStages,
+    Queue, RequestAdapterOptions, ShaderModuleDescriptor, ShaderSource, ShaderStages,
 };
 
 #[repr(C)]
