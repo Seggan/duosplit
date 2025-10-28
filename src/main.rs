@@ -31,7 +31,6 @@ async fn main() {
     println!("Setting up GPU context...");
     let mut pixels = Vec::new();
     let flat_red = red_channel.flatten();
-    println!("{}", flat_red[0]);
     let flat_green = green_channel.flatten();
     let flat_blue = blue_channel.flatten();
     for i in 0..flat_red.len() {
