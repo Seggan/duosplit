@@ -122,13 +122,15 @@ if asset:
     current_hash = "sha256:" + sha256(RUNTIME_PATH.read_bytes()).hexdigest()
     expected_hash = asset["digest"]
     if current_hash != expected_hash:
-        siril.log("A new version of duosplit is available. Downloading update...")
-        download_url = asset["browser_download_url"]
-        download_with_progress(
-            siril,
-            download_url,
-            str(RUNTIME_PATH)
-        )
+        if siril.confirm_messagebox("New Duosplit Version",
+                                    "A new version of the Duosplit runtime is available. Download?",
+                                    "Download"):
+            download_url = asset["browser_download_url"]
+            download_with_progress(
+                siril,
+                download_url,
+                str(RUNTIME_PATH)
+            )
     else:
         siril.log("Duosplit runtime is up to date.")
 
@@ -162,6 +164,8 @@ class Parameters:
     elitism: int
     initial_std_dev: float
     decay_rate: float
+    chunks: int
+    timings: bool
 
 
 def stdout_capture(stream, gens):
@@ -178,9 +182,10 @@ def stdout_capture(stream, gens):
 
 
 def stderr_capture(stream, buffer):
+    import sys
     for line in iter(stream.readline, ''):
         buffer.write(line)
-        siril.log(line.strip(), color=LogColor.RED)
+        sys.stderr.write(line)
     stream.close()
 
 
@@ -191,10 +196,12 @@ def run_duosplit(parameters: Parameters):
     env = os.environ.copy()
     if "WAYLAND_DISPLAY" in env:
         # WGPU is wonky with Wayland + Vulkan, so force it to use OpenGL instead
-        env["WGPU_BACKEND"] = "gl"
+        #env["WGPU_BACKEND"] = "gl"
+        pass
 
     args = [
         str(RUNTIME_PATH),
+        str(IMAGE_FILE),
         "--qrh", str(parameters.qe_r_ha),
         "--qro", str(parameters.qe_r_oiii),
         "--qgh", str(parameters.qe_g_ha),
@@ -206,9 +213,11 @@ def run_duosplit(parameters: Parameters):
         "--elitism", str(parameters.elitism),
         "--initial-std", str(parameters.initial_std_dev),
         "--decay-rate", str(parameters.decay_rate),
-        "--output", siril.get_siril_wd(),
-        str(IMAGE_FILE)
+        "--chunks", str(parameters.chunks),
+        "--output", siril.get_siril_wd()
     ]
+    if parameters.timings:
+        args.append("--timings")
 
     siril.log("Running " + " ".join(args), color=LogColor.BLUE)
 
@@ -248,7 +257,7 @@ def run_duosplit(parameters: Parameters):
 ensure_installed("pyqt6")
 
 from PyQt6.QtWidgets import QApplication, QVBoxLayout, QLineEdit, QPushButton, QFormLayout, QLabel, \
-    QHBoxLayout, QWidget, QComboBox, QMessageBox
+    QHBoxLayout, QWidget, QComboBox, QMessageBox, QCheckBox
 from PyQt6.QtCore import Qt, QEventLoop
 from PyQt6.QtGui import QImage, QPixmap
 
@@ -378,12 +387,19 @@ class MainWindow(QWidget):
         self.decay_rate_input = QLineEdit()
         self.decay_rate_input.setText("0.1")
         self.decay_rate_input.setToolTip("Decay rate for mutation standard deviation")
+        self.chunks_input = QLineEdit()
+        self.chunks_input.setText("2048")
+        self.chunks_input.setToolTip("Number of chunks to divide the image into for processing")
+        self.timings_input = QCheckBox()
+        self.timings_input.setToolTip("Display timing information during processing")
 
         form_layout.addRow("Population:", self.population_input)
         form_layout.addRow("Generations:", self.generations_input)
         form_layout.addRow("Elitism:", self.elitism_input)
         form_layout.addRow("Initial Standard Deviation:", self.initial_std_input)
         form_layout.addRow("Decay Rate:", self.decay_rate_input)
+        form_layout.addRow("Chunks:", self.chunks_input)
+        form_layout.addRow("Show Timings:", self.timings_input)
 
         main_layout.addLayout(form_layout)
 
@@ -430,6 +446,8 @@ class MainWindow(QWidget):
                 elitism=int(self.elitism_input.text().strip()),
                 initial_std_dev=float(self.initial_std_input.text().strip()),
                 decay_rate=float(self.decay_rate_input.text().strip()),
+                chunks=int(self.chunks_input.text().strip()),
+                timings=self.timings_input.isChecked(),
             )
         except ValueError:
             QMessageBox.critical(self, "Error", "Please ensure all parameters are valid numbers.")

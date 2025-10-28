@@ -49,7 +49,13 @@ async fn main() {
         ha: cli.blue_ha_qe,
         oiii: cli.blue_oiii_qe,
     };
-    let context = GpuContext::new(pixels, 2048, (qe_red, qe_green, qe_blue)).await;
+    let context = match GpuContext::new(pixels, cli.chunks, (qe_red, qe_green, qe_blue)).await {
+        Ok(ctx) => ctx,
+        Err(err) => {
+            eprintln!("Error setting up GPU context: {}", err);
+            exit(1);
+        }
+    };
 
     println!("Starting genetic algorithm optimization...");
     let best_genome = optimized_genome(&cli, context).await;

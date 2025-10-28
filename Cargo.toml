@@ -1,6 +1,6 @@
 [package]
 name = "duosplit"
-version = "0.2.0"
+version = "0.3.0"
 description = "A tool for splitting dual-narrowband hydrogen-alpha and oxygen-III images."
 edition = "2021"
 

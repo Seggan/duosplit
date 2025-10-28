@@ -1,5 +1,5 @@
-use std::path::PathBuf;
 use clap::Parser;
+use std::path::PathBuf;
 
 #[derive(Parser)]
 #[command(version, about)]
@@ -43,6 +43,9 @@ pub struct Cli {
     #[arg(short, long, default_value_t = 0.1, help = "Decay rate for mutation standard deviation")]
     pub decay_rate: f32,
 
-    #[arg(short, long, action)]
+    #[arg(short, long, default_value_t = 2048, help = "Number of chunks to split the image into before processing on the GPU")]
+    pub chunks: usize,
+
+    #[arg(short, long, action, help = "Enable timing output")]
     pub timings: bool
 }

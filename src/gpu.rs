@@ -6,8 +6,9 @@ use wgpu::{
     BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor,
     BindGroupLayoutEntry, BindingType, Buffer, BufferBindingType, BufferUsages,
     CommandEncoderDescriptor, ComputePassDescriptor, ComputePipeline, ComputePipelineDescriptor,
-    Device, DeviceDescriptor, Instance, InstanceDescriptor, MapMode, PipelineLayoutDescriptor,
-    Queue, RequestAdapterOptions, ShaderModuleDescriptor, ShaderSource, ShaderStages,
+    Device, DeviceDescriptor, Instance, InstanceDescriptor, Limits, MapMode,
+    PipelineLayoutDescriptor, Queue, RequestAdapterOptions, ShaderModuleDescriptor, ShaderSource,
+    ShaderStages,
 };
 
 #[repr(C)]
@@ -33,14 +34,32 @@ impl GpuContext {
         image: Vec<[f32; 3]>,
         chunks: usize,
         quantum_efficiencies: (QEUniform, QEUniform, QEUniform),
-    ) -> Self {
+    ) -> Result<Self, String> {
         let instance = Instance::new(&InstanceDescriptor::from_env_or_default());
         let adapter = instance
             .request_adapter(&RequestAdapterOptions::default())
             .await
             .unwrap();
+        let image_chunk_size = image.len() * size_of::<[f32; 3]>() / chunks;
+        if image_chunk_size > adapter.limits().max_buffer_size as usize
+            || image_chunk_size > adapter.limits().max_storage_buffer_binding_size as usize
+        {
+            return Err("Image chunk size exceeds maximum buffer size for the GPU adapter. You must increase the chunk amount in order to process the image".into());
+        }
         let (device, queue) = adapter
-            .request_device(&DeviceDescriptor::default())
+            .request_device(&DeviceDescriptor {
+                required_limits: Limits {
+                    max_buffer_size: adapter.limits().max_buffer_size,
+                    max_storage_buffer_binding_size: adapter
+                        .limits()
+                        .max_storage_buffer_binding_size,
+                    max_uniform_buffer_binding_size: adapter
+                        .limits()
+                        .max_uniform_buffer_binding_size,
+                    ..Default::default()
+                },
+                ..Default::default()
+            })
             .await
             .unwrap();
         let alg_shader = device.create_shader_module(ShaderModuleDescriptor {
@@ -168,7 +187,7 @@ impl GpuContext {
             usage: BufferUsages::UNIFORM,
         });
 
-        Self {
+        Ok(Self {
             device,
             queue,
             layout,
@@ -177,7 +196,7 @@ impl GpuContext {
             chunks,
             image_len: image.len(),
             quantum_efficiencies: (qe_red_buffer, qe_green_buffer, qe_blue_buffer),
-        }
+        })
     }
 
     pub async fn compute_fitness(&self, genomes: &[Genome]) -> Vec<f32> {
