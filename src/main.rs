@@ -3,7 +3,7 @@ use crate::genetics::{j_k_from_i, Genome};
 use crate::gpu::{GpuContext, QEUniform};
 use crate::normal_distr::NormalDistribution;
 use clap::Parser;
-use fitrs::{Fits, FitsData, Hdu};
+use fitrs::{Fits, FitsData, Hdu, HeaderValue};
 use ndarray::{s, Array2, Array3};
 use rand::{rng, Rng};
 use std::path::{Path, PathBuf};
@@ -31,6 +31,7 @@ async fn main() {
     println!("Setting up GPU context...");
     let mut pixels = Vec::new();
     let flat_red = red_channel.flatten();
+    println!("{}", flat_red[0]);
     let flat_green = green_channel.flatten();
     let flat_blue = blue_channel.flatten();
     for i in 0..flat_red.len() {
@@ -104,36 +105,55 @@ async fn main() {
 fn read_fits(path: &impl AsRef<Path>) -> Result<(Array2<f32>, Array2<f32>, Array2<f32>), String> {
     let image = Fits::open(path).map_err(|e| format!("Failed to open FITS file: {}", e))?;
     let hdu = image.get(0).ok_or("No HDU found in FITS file")?;
+    let scale = hdu
+        .value("BSCALE")
+        .map(|v| match v {
+            HeaderValue::IntegerNumber(i) => *i as f64,
+            HeaderValue::RealFloatingNumber(f) => *f,
+            _ => panic!("Unexpected BSCALE type"),
+        })
+        .unwrap_or(1.0);
+    let offset = hdu
+        .value("BZERO")
+        .map(|v| match v {
+            HeaderValue::IntegerNumber(i) => *i as f64,
+            HeaderValue::RealFloatingNumber(f) => *f,
+            _ => panic!("Unexpected BZERO type"),
+        })
+        .unwrap_or(0.0);
     let (shape, data) = match hdu.read_data() {
         FitsData::Characters(arr) => (
             arr.shape,
-            arr.data.into_iter().map(|v| v as u64 as f32).collect(),
+            arr.data.into_iter().map(|v| v as u64 as f64).collect(),
         ),
         FitsData::IntegersI32(arr) => (
             arr.shape,
             arr.data
                 .into_iter()
-                .map(|v| v.unwrap_or(0) as f32)
+                .map(|v| v.unwrap_or(0) as f64)
                 .collect(),
         ),
         FitsData::IntegersU32(arr) => (
             arr.shape,
             arr.data
                 .into_iter()
-                .map(|v| v.unwrap_or(0) as f32)
+                .map(|v| v.unwrap_or(0) as f64)
                 .collect(),
         ),
-        FitsData::FloatingPoint32(arr) => (arr.shape, arr.data),
+        FitsData::FloatingPoint32(arr) => {
+            (arr.shape, arr.data.into_iter().map(|v| v as f64).collect())
+        }
         FitsData::FloatingPoint64(arr) => {
             eprintln!(
                 "Warning: Converting FITS data from 64 bit to 32 bit; this may lose precision."
             );
-            (arr.shape, arr.data.into_iter().map(|v| v as f32).collect())
+            (arr.shape, arr.data)
         }
     };
 
     let channels = Array3::from_shape_vec((shape[2], shape[1], shape[0]), data)
-        .expect("Failed to reshape FITS data into 3D array");
+        .expect("Failed to reshape FITS data into 3D array")
+        .mapv(|v| (v * scale + offset) as f32);
     let red_channel = channels.slice(s![0, .., ..]).into_owned();
     let green_channel = channels.slice(s![1, .., ..]).into_owned();
     let blue_channel = channels.slice(s![2, .., ..]).into_owned();

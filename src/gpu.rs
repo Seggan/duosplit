@@ -288,7 +288,8 @@ impl GpuContext {
 
         result
             .chunks(self.chunks)
-            .map(|chunk| chunk.iter().sum::<f32>() / (self.image_len as f32))
+            .map(|chunk| chunk.iter().sum::<f32>())
+            .map(|fit| fit / (self.image_len as f32))
             .collect()
     }
 }
