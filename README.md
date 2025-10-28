@@ -35,6 +35,8 @@ Building duosplit requires [Rust](https://www.rust-lang.org/) and [Cargo](https:
 
 ## Usage
 ```
+A tool for splitting dual-narrowband hydrogen-alpha and oxygen-III images.
+
 Usage: duosplit [OPTIONS] --qrh <RED_HA_QE> --qgh <GREEN_HA_QE> --qbh <BLUE_HA_QE> --qro <RED_OIII_QE> --qgo <GREEN_OIII_QE> --qbo <BLUE_OIII_QE> <INPUT>
 
 Arguments:
@@ -65,6 +67,10 @@ Options:
           Initial standard deviation for mutation [default: 0.5]
   -d, --decay-rate <DECAY_RATE>
           Decay rate for mutation standard deviation [default: 0.1]
+  -c, --chunks <CHUNKS>
+          Number of chunks to split the image into before processing on the GPU [default: 2048]
+  -t, --timings
+          Enable timing output
   -h, --help
           Print help
   -V, --version
