@@ -46,7 +46,7 @@ def delete_temp_image():
     siril.reset_progress()
 
 
-#atexit.register(delete_temp_image)
+atexit.register(delete_temp_image)
 
 
 def get_runtime_version():
