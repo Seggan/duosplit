@@ -8,6 +8,15 @@ Windows and Linux binaries are available on the [releases page](https://github.c
 Due to MacOS being a super annoying platform to build for and I don't have a Mac, MacOS binaries are not provided.
 You can build from source on MacOS using the instructions below.
 
+## Siril Script
+I also have created a Siril script that automatically downloads the correct runtimes and runs duosplit for you on the Siril image.
+The script is also located on the releases page.
+
+## Using Linux, Wayland, and Vulkan
+WGPU (the graphical computation backend used by duosplit) has some issues on Linux with Wayland and Vulkan.
+If you are using Wayland, you may need to set the environment variable `WGPU_BACKEND` to `gl` to use the OpenGL backend instead of Vulkan.
+If you are using the Siril script, it will automatically set this variable for you.
+
 ## Building from Source
 Building duosplit requires [Rust](https://www.rust-lang.org/) and [Cargo](https://doc.rust-lang.org/cargo/getting-started/installation.html) to be installed.
 
