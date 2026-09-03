@@ -57,7 +57,7 @@ def get_runtime_version():
         elif platform.machine() == "aarch64":
             return "duosplit-aarch64-unknown-linux-gnu"
     elif platform.system() == "Windows" and '64' in platform.machine():
-        return "duosplit-x86_64-unknown-linux-gnu.exe"
+        return "duosplit-x86_64-pc-windows-gnu.exe"
     siril.error_messagebox(
         "This script only provides a runtime for Linux x86_64, Linux ARM64, and Windows x86_64 systems. "
         "If you do not have such a system, you will need to download the runtime from "
