@@ -49,6 +49,6 @@ pub struct Cli {
     #[arg(short, long, action, help = "Enable timing output")]
     pub timings: bool,
 
-    #[arg(short, long, action, default_value_t = true, help = "Normalize the images to each other")]
+    #[arg(short, long, action, default_value_t = false, help = "Normalize the images to each other")]
     pub normalize: bool,
 }
