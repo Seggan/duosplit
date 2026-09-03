@@ -1,3 +1,28 @@
+"""
+Duosplit interface script
+==================================
+This script provides a graphical user interface between Duosplit and Siril.
+Duosplit is a tool for accurately splitting hydrogen-alpha and oxygen-III
+images from dual narrowband astrophotography captures, ased on the math
+provided (and explained) to me by Raven LaRue.
+
+(c) Daniel Karnaukh (Seggan) 2025-2026
+SPDX-License-Identifier: GPL-3.0-or-later
+
+Main repository with runtime: https://github.com/Seggan/duosplit
+"""
+
+# Version History
+
+# 0.2.0 Initial script release (script versions are synchronized with the Duosplit runtime version)
+
+# 0.3.0 Script no longer forces OpenGL backend on Linux with Wayland.
+#       Script now asks the user to confirm when updating the runtime.
+#       Integrated `--chunks` argument
+#       Integrated `--timings` argument
+
+# 0.4.0 Integrated `--normalize` argument
+
 from sirilpy import SirilInterface, LogColor, NoImageError
 from sirilpy.utility import download_with_progress, ensure_installed, SuppressedStderr
 
