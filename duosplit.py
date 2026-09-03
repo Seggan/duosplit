@@ -22,6 +22,7 @@ Main repository with runtime: https://github.com/Seggan/duosplit
 #       Integrated `--timings` argument
 
 # 0.4.0 Integrated `--normalize` argument
+#       Script now downloads Duosplit on Windows correctly
 
 from sirilpy import SirilInterface, LogColor, NoImageError
 from sirilpy.utility import download_with_progress, ensure_installed, SuppressedStderr
