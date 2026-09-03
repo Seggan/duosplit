@@ -67,7 +67,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         let h = pixel_noise(genome.i, jk.x, jk.y, pixel);
         let o = pixel_noise(genome.x, yz.x, yz.y, pixel);
 
-        fitness_value += h * h + o * o;
+        fitness_value += h + o;
     }
     fitness[genome_idx * total_chunks + chunk] = fitness_value;
 }
