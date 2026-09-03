@@ -70,7 +70,6 @@ async fn main() {
         cli.green_oiii_qe,
         cli.blue_oiii_qe,
     );
-    let h_alpha = ha_r * &red_channel + ha_g * &green_channel + ha_b * &blue_channel;
 
     let oiii_r = best_genome.x;
     let (oiii_g, oiii_b) = j_k_from_i(
@@ -82,7 +81,6 @@ async fn main() {
         cli.green_ha_qe,
         cli.blue_ha_qe,
     );
-    let oiii = oiii_r * &red_channel + oiii_g * &green_channel + oiii_b * &blue_channel;
 
     println!("Best genome results:");
     println!(
@@ -93,6 +91,15 @@ async fn main() {
         "OIII coefficients: r = {}, g = {}, b = {}",
         oiii_r, oiii_g, oiii_b
     );
+
+    let h_alpha = ha_r * &red_channel + ha_g * &green_channel + ha_b * &blue_channel;
+    let mut oiii = oiii_r * &red_channel + oiii_g * &green_channel + oiii_b * &blue_channel;
+
+    if cli.normalize {
+        let mean_ha = h_alpha.mean().unwrap();
+        let mean_oiii = oiii.mean().unwrap();
+        oiii = oiii - mean_oiii + mean_ha;
+    }
 
     if let Err(err) = write_fits(&cli.output.join("h_alpha.fit"), &h_alpha) {
         eprintln!("Error writing H-alpha FITS file: {}", err);

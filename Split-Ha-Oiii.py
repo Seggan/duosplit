@@ -166,6 +166,7 @@ class Parameters:
     decay_rate: float
     chunks: int
     timings: bool
+    normalize: bool
 
 
 def stdout_capture(stream, gens):
@@ -218,6 +219,8 @@ def run_duosplit(parameters: Parameters):
     ]
     if parameters.timings:
         args.append("--timings")
+    if parameters.normalize:
+        args.append("--normalize")
 
     siril.log("Running " + " ".join(args), color=LogColor.BLUE)
 
@@ -392,6 +395,9 @@ class MainWindow(QWidget):
         self.chunks_input.setToolTip("Number of chunks to divide the image into for processing")
         self.timings_input = QCheckBox()
         self.timings_input.setToolTip("Display timing information during processing")
+        self.normalize_input = QCheckBox()
+        self.normalize_input.setChecked(True)
+        self.normalize_input.setToolTip("Normalize the images on output")
 
         form_layout.addRow("Population:", self.population_input)
         form_layout.addRow("Generations:", self.generations_input)
@@ -400,6 +406,7 @@ class MainWindow(QWidget):
         form_layout.addRow("Decay Rate:", self.decay_rate_input)
         form_layout.addRow("Chunks:", self.chunks_input)
         form_layout.addRow("Show Timings:", self.timings_input)
+        form_layout.addRow("Normalize:", self.normalize_input)
 
         main_layout.addLayout(form_layout)
 
@@ -448,6 +455,7 @@ class MainWindow(QWidget):
                 decay_rate=float(self.decay_rate_input.text().strip()),
                 chunks=int(self.chunks_input.text().strip()),
                 timings=self.timings_input.isChecked(),
+                normalize=self.normalize_input.isChecked()
             )
         except ValueError:
             QMessageBox.critical(self, "Error", "Please ensure all parameters are valid numbers.")
