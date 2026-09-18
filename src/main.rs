@@ -1,6 +1,6 @@
 use crate::cli::Cli;
+use crate::fit::{FitnessCalculator, QEUniform};
 use crate::genetics::{j_k_from_i, Genome};
-use crate::gpu::{GpuContext, QEUniform};
 use crate::normal_distr::NormalDistribution;
 use clap::Parser;
 use fitrs::{Fits, FitsData, Hdu, HeaderValue};
@@ -12,8 +12,9 @@ use std::time::Instant;
 
 mod cli;
 mod genetics;
-mod gpu;
 mod normal_distr;
+mod gpu;
+mod fit;
 
 #[pollster::main]
 async fn main() {
@@ -49,16 +50,23 @@ async fn main() {
         ha: cli.blue_ha_qe,
         oiii: cli.blue_oiii_qe,
     };
-    let context = match GpuContext::new(pixels, cli.chunks, (qe_red, qe_green, qe_blue)).await {
+    let context = match FitnessCalculator::new(pixels, cli.chunks, (qe_red, qe_green, qe_blue)).await {
         Ok(ctx) => ctx,
         Err(err) => {
             eprintln!("Error setting up GPU context: {}", err);
             exit(1);
         }
     };
+    println!("Using GPU: {}", context.get_gpu_name());
 
     println!("Starting genetic algorithm optimization...");
-    let best_genome = optimized_genome(&cli, context).await;
+    let best_genome = match optimized_genome(&cli, context).await {
+        Ok(genome) => genome,
+        Err(err) => {
+            eprintln!("Error running optimization: {}", err);
+            exit(1);
+        }
+    };
 
     let ha_r = best_genome.i;
     let (ha_g, ha_b) = j_k_from_i(
@@ -172,7 +180,7 @@ fn read_fits(path: &impl AsRef<Path>) -> Result<(Array2<f32>, Array2<f32>, Array
     Ok((red_channel, green_channel, blue_channel))
 }
 
-async fn optimized_genome(cli: &Cli, context: GpuContext) -> Genome {
+async fn optimized_genome(cli: &Cli, mut context: FitnessCalculator) -> Result<Genome, String> {
     let mut rng = rng();
     let mut population = Vec::with_capacity(cli.population_size);
     for _ in 0..cli.population_size {
@@ -182,7 +190,7 @@ async fn optimized_genome(cli: &Cli, context: GpuContext) -> Genome {
     let mut fitnesses = Vec::new();
     for gen in 0..cli.generations {
         let start = Instant::now();
-        fitnesses = context.compute_fitness(&population).await;
+        fitnesses = context.compute_fitness(&population).await?;
 
         let elite_indices = {
             let mut indices = (0..cli.population_size).collect::<Vec<usize>>();
@@ -225,7 +233,7 @@ async fn optimized_genome(cli: &Cli, context: GpuContext) -> Genome {
 
     let (best_genome, best_fitness) = best_genome_and_fitness(&population, &fitnesses);
     println!("Best genome found with noise: {}", best_fitness);
-    if best_genome.i < best_genome.x {
+    Ok(if best_genome.i < best_genome.x {
         println!("Warning: H-alpha component is less than OIII component; they may be swapped.");
         Genome {
             i: best_genome.x,
@@ -233,7 +241,7 @@ async fn optimized_genome(cli: &Cli, context: GpuContext) -> Genome {
         }
     } else {
         best_genome
-    }
+    })
 }
 
 fn best_genome_and_fitness(population: &Vec<Genome>, fitnesses: &Vec<f32>) -> (Genome, f32) {

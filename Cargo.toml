@@ -15,3 +15,5 @@ wgpu = "27.0.1"
 pollster = { version = "0.4", features = ["macro"] }
 flume = "0.11.1"
 bytemuck = "1.14"
+
+thiserror = "2.0.20"
