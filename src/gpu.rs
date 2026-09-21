@@ -95,10 +95,12 @@ impl GpuContext {
         let instance = Instance::new(&InstanceDescriptor::from_env_or_default());
         let adapter = instance
             .request_adapter(&RequestAdapterOptions {
-                power_preference: PowerPreference::HighPerformance,
+                power_preference: PowerPreference::HighPerformance, // use best GPU
                 ..Default::default()
             })
             .await?;
+
+        // make sure min binding amount is respected
         let max_buf_size = adapter.limits().max_buffer_size;
         let max_storage_size = adapter.limits().max_storage_buffer_binding_size;
         for binding in binding_specs.iter() {
@@ -121,6 +123,7 @@ impl GpuContext {
             }
         }
 
+        // use max buffer size
         let (device, queue) = adapter
             .request_device(&DeviceDescriptor {
                 required_limits: Limits {
@@ -247,6 +250,7 @@ impl GpuContext {
             cpass.dispatch_workgroups(workgroup_dims.0, workgroup_dims.1, workgroup_dims.2);
         }
 
+        // setup staging buffers
         for binding in self.bindings.iter_mut() {
             if binding.spec.allow_readout {
                 let buffer = binding.buffer.as_ref().unwrap(); // buffer guaranteed to be not None cause of above check
@@ -265,6 +269,7 @@ impl GpuContext {
 
         self.queue.submit(Some(encoder.finish()));
 
+        // copy staging buffers
         let mut channels = Vec::new();
         for binding in self.bindings.iter() {
             if let Some(staging_buffer) = &binding.staging_buffer {
