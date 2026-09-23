@@ -7,7 +7,7 @@ use crate::normal_distr::NormalDistribution;
 use anyhow::Result;
 use clap::Parser;
 use ndarray::s;
-use rand::{rng, Rng};
+use rand::{rng, Rng, RngExt};
 use std::process::exit;
 use std::time::Instant;
 

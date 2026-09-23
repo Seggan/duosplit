@@ -29,7 +29,7 @@ struct InnerGpuDevice {
 
 impl GpuDevice {
     pub fn new() -> Result<Self> {
-        let instance = Instance::new(&InstanceDescriptor::from_env_or_default());
+        let instance = Instance::new(InstanceDescriptor::new_without_display_handle_from_env());
         let adapter = instance
             .request_adapter(&RequestAdapterOptions {
                 power_preference: PowerPreference::HighPerformance, // use best GPU
@@ -91,8 +91,8 @@ impl GpuDevice {
 
         let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
             label: None,
-            bind_group_layouts: &[&layout],
-            push_constant_ranges: &[],
+            bind_group_layouts: &[Some(&layout)],
+            immediate_size: 0
         });
 
         let pipeline = device.create_compute_pipeline(&ComputePipelineDescriptor {
@@ -162,7 +162,7 @@ impl BufferBinding {
     pub fn read_data(&mut self) -> Option<Vec<u8>> {
         if let Some(staging_buffer) = self.staging_buffer.take() {
             let slice = staging_buffer.slice(..);
-            let data = slice.get_mapped_range();
+            let data = slice.get_mapped_range().unwrap();
             let result = data.to_vec();
             drop(data);
             staging_buffer.unmap();

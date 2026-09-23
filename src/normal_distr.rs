@@ -1,6 +1,6 @@
-use std::f32::consts::PI;
 use rand::distr::Distribution;
-use rand::Rng;
+use rand::{Rng, RngExt};
+use std::f32::consts::PI;
 
 pub struct NormalDistribution {
     mean: f32,

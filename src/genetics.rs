@@ -1,5 +1,5 @@
 use bytemuck::{Pod, Zeroable};
-use rand::Rng;
+use rand::{Rng, RngExt};
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Pod, Zeroable)]
