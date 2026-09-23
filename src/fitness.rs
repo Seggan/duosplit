@@ -1,6 +1,8 @@
 use crate::genetics::Genome;
-use crate::gpu::{BufferBindingSpec, GpuContext, GpuContextCreationError};
+use crate::gpu::{BufferBindingSpec, GpuDevice, GpuProgram};
+use anyhow::Result;
 use bytemuck::{Pod, Zeroable};
+use ndarray::Array3;
 use wgpu::BufferBindingType;
 
 #[repr(C)]
@@ -11,18 +13,19 @@ pub struct QEUniform {
 }
 
 pub struct FitnessCalculator {
-    context: GpuContext,
+    context: GpuProgram,
     chunks: usize,
     image_len: usize,
 }
 
 impl FitnessCalculator {
-    pub async fn new(
-        image: Vec<[f32; 3]>,
+    pub fn new(
+        device: &GpuDevice,
+        image: &Array3<f32>,
         chunks: usize,
         quantum_efficiencies: (QEUniform, QEUniform, QEUniform),
-    ) -> Result<Self, String> {
-        let mut context = match GpuContext::new(
+    ) -> Result<Self> {
+        let mut context = device.create_program(
             include_str!("fit.wgsl"),
             vec![
                 BufferBindingSpec {
@@ -68,20 +71,12 @@ impl FitnessCalculator {
                     allow_readout: false,
                 },
             ],
-        )
-            .await
-        {
-            Ok(context) => context,
-            Err(e) => return Err(match e {
-                GpuContextCreationError::BindingTooLarge(_) => "Image chunk size exceeds maximum buffer size for the GPU adapter. You must increase the chunk amount in order to process the image".to_string(),
-                _ => e.to_string()
-            }),
-        };
+        )?;
 
         context
             .get_buffer_binding(IMAGE_BINDING)
             .unwrap()
-            .set_data(bytemuck::cast_slice(&image));
+            .set_data(bytemuck::cast_slice(&image.as_slice().unwrap()));
 
         context
             .get_buffer_binding(QE_R_BINDING)
@@ -110,11 +105,7 @@ impl FitnessCalculator {
         })
     }
 
-    pub fn get_gpu_name(&self) -> &str {
-        self.context.get_gpu_name()
-    }
-
-    pub async fn compute_fitness(&mut self, genomes: &[Genome]) -> Result<Vec<f32>, String> {
+    pub fn compute_fitness(&mut self, genomes: &[Genome]) -> Result<Vec<f32>> {
         self.context
             .get_buffer_binding(GENOMES_BINDING)
             .unwrap()
@@ -131,9 +122,7 @@ impl FitnessCalculator {
         let workgroup_count_x = ((genomes.len() as f32) / 4.0).ceil() as u32;
         let workgroup_count_y = ((self.chunks as f32) / 64.0).ceil() as u32;
         self.context
-            .execute((workgroup_count_x, workgroup_count_y, 1))
-            .await
-            .map_err(|err| err.to_string())?;
+            .execute((workgroup_count_x, workgroup_count_y, 1))?;
 
         let fitness_binding = self.context.get_buffer_binding(FITNESS_BINDING).unwrap();
         let data = bytemuck::cast_slice(&fitness_binding.read_data().unwrap()).to_vec();

@@ -1,10 +1,14 @@
 use crate::cli::Cli;
 use crate::fitness::{FitnessCalculator, QEUniform};
+use crate::fits::write_fits;
 use crate::genetics::{j_k_from_i, Genome};
+use crate::gpu::GpuDevice;
 use crate::normal_distr::NormalDistribution;
+use anyhow::Result;
 use clap::Parser;
 use ndarray::s;
 use rand::{rng, Rng};
+use std::path::PathBuf;
 use std::process::exit;
 use std::time::Instant;
 
@@ -15,8 +19,7 @@ mod gpu;
 mod fitness;
 mod fits;
 
-#[pollster::main]
-async fn main() {
+fn main() -> Result<()> {
     let cli = Cli::parse();
 
     println!("Reading FITS file: {}", cli.input.display());
@@ -28,18 +31,11 @@ async fn main() {
         }
     };
 
-    let red_channel = image.slice(s![0, .., ..]);
-    let green_channel = image.slice(s![1, .., ..]);
-    let blue_channel = image.slice(s![2, .., ..]);
+    println!("Setting up GPU device...");
+    let device = GpuDevice::new()?;
+    println!("Using GPU: {}", device.get_gpu_name());
 
-    println!("Setting up GPU context...");
-    let mut pixels = Vec::new();
-    let flat_red = red_channel.flatten();
-    let flat_green = green_channel.flatten();
-    let flat_blue = blue_channel.flatten();
-    for i in 0..flat_red.len() {
-        pixels.push([flat_red[i], flat_green[i], flat_blue[i]]);
-    }
+    write_fits(&PathBuf::from("a.fit"), fits::lum(&device, &image)?)?;
 
     let qe_red = QEUniform {
         ha: cli.red_ha_qe,
@@ -53,23 +49,10 @@ async fn main() {
         ha: cli.blue_ha_qe,
         oiii: cli.blue_oiii_qe,
     };
-    let context = match FitnessCalculator::new(pixels, cli.chunks, (qe_red, qe_green, qe_blue)).await {
-        Ok(ctx) => ctx,
-        Err(err) => {
-            eprintln!("Error setting up GPU context: {}", err);
-            exit(1);
-        }
-    };
-    println!("Using GPU: {}", context.get_gpu_name());
+    let context = FitnessCalculator::new(&device, &image, cli.chunks, (qe_red, qe_green, qe_blue))?;
 
     println!("Starting genetic algorithm optimization...");
-    let best_genome = match optimized_genome(&cli, context).await {
-        Ok(genome) => genome,
-        Err(err) => {
-            eprintln!("Error running optimization: {}", err);
-            exit(1);
-        }
-    };
+    let best_genome = optimized_genome(&cli, context)?;
 
     let ha_r = best_genome.i;
     let (ha_g, ha_b) = j_k_from_i(
@@ -103,6 +86,9 @@ async fn main() {
         oiii_r, oiii_g, oiii_b
     );
 
+    let red_channel = image.slice(s![.., .., 0]);
+    let green_channel = image.slice(s![.., .., 1]);
+    let blue_channel = image.slice(s![.., .., 2]);
     let h_alpha = ha_r * &red_channel + ha_g * &green_channel + ha_b * &blue_channel;
     let mut oiii = oiii_r * &red_channel + oiii_g * &green_channel + oiii_b * &blue_channel;
 
@@ -112,20 +98,15 @@ async fn main() {
         oiii = oiii - mean_oiii + mean_ha;
     }
 
-    if let Err(err) = fits::write_fits(&cli.output.join("h_alpha.fit"), &h_alpha) {
-        eprintln!("Error writing H-alpha FITS file: {}", err);
-        exit(1);
-    }
-
-    if let Err(err) = fits::write_fits(&cli.output.join("oiii.fit"), &oiii) {
-        eprintln!("Error writing OIII FITS file: {}", err);
-        exit(1);
-    }
+    write_fits(&cli.output.join("h_alpha.fit"), h_alpha)?;
+    write_fits(&cli.output.join("oiii.fit"), oiii)?;
 
     println!("Done!");
+
+    Ok(())
 }
 
-async fn optimized_genome(cli: &Cli, mut context: FitnessCalculator) -> Result<Genome, String> {
+fn optimized_genome(cli: &Cli, mut context: FitnessCalculator) -> Result<Genome> {
     let mut rng = rng();
     let mut population = Vec::with_capacity(cli.population_size);
     for _ in 0..cli.population_size {
@@ -135,7 +116,7 @@ async fn optimized_genome(cli: &Cli, mut context: FitnessCalculator) -> Result<G
     let mut fitnesses = Vec::new();
     for gen in 0..cli.generations {
         let start = Instant::now();
-        fitnesses = context.compute_fitness(&population).await?;
+        fitnesses = context.compute_fitness(&population)?;
 
         let elite_indices = {
             let mut indices = (0..cli.population_size).collect::<Vec<usize>>();
