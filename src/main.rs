@@ -8,7 +8,6 @@ use anyhow::Result;
 use clap::Parser;
 use ndarray::s;
 use rand::{rng, Rng};
-use std::path::PathBuf;
 use std::process::exit;
 use std::time::Instant;
 
@@ -34,8 +33,6 @@ fn main() -> Result<()> {
     println!("Setting up GPU device...");
     let device = GpuDevice::new()?;
     println!("Using GPU: {}", device.get_gpu_name());
-
-    write_fits(&PathBuf::from("a.fit"), fits::lum(&device, &image)?)?;
 
     let qe_red = QEUniform {
         ha: cli.red_ha_qe,
