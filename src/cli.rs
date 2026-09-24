@@ -43,7 +43,7 @@ pub struct Cli {
     #[arg(short, long, default_value_t = 0.1, help = "Decay rate for mutation standard deviation")]
     pub decay_rate: f32,
 
-    #[arg(short, long, default_value_t = 2048, help = "Number of chunks to split the image into before processing on the GPU")]
+    #[arg(short, long, default_value_t = 8196, help = "Number of chunks to split the image into before processing on the GPU")]
     pub chunks: usize,
 
     #[arg(short, long, action, help = "Enable timing output")]

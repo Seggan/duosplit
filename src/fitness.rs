@@ -119,8 +119,8 @@ impl FitnessCalculator {
                 genomes.len() * self.chunks
             ]));
 
-        let workgroup_count_x = ((genomes.len() as f32) / 4.0).ceil() as u32;
-        let workgroup_count_y = ((self.chunks as f32) / 64.0).ceil() as u32;
+        let workgroup_count_x = genomes.len().div_ceil(4) as u32;
+        let workgroup_count_y = self.chunks.div_ceil(64) as u32;
         self.context
             .execute((workgroup_count_x, workgroup_count_y, 1))?;
 
