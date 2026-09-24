@@ -1,22 +1,20 @@
 use crate::cli::Cli;
 use crate::fitness::{FitnessCalculator, QEUniform};
 use crate::fits::write_fits;
-use crate::genetics::{j_k_from_i, Genome};
+use crate::genetics::{j_k_from_i, Genome, Population};
 use crate::gpu::GpuDevice;
-use crate::normal_distr::NormalDistribution;
 use anyhow::Result;
 use clap::Parser;
 use ndarray::s;
-use rand::{rng, Rng, RngExt};
 use std::process::exit;
 use std::time::Instant;
 
 mod cli;
-mod genetics;
-mod normal_distr;
-mod gpu;
 mod fitness;
 mod fits;
+mod genetics;
+mod gpu;
+mod normal_distr;
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
@@ -104,49 +102,17 @@ fn main() -> Result<()> {
 }
 
 fn optimized_genome(cli: &Cli, mut context: FitnessCalculator) -> Result<Genome> {
-    let mut rng = rng();
-    let mut population = Vec::with_capacity(cli.population_size);
-    for _ in 0..cli.population_size {
-        population.push(Genome::random(&mut rng));
-    }
+    let mut population = Population::new_random(
+        cli.population_size,
+        cli.elitism,
+        cli.initial_std,
+        cli.decay_rate,
+    );
 
-    let mut fitnesses = Vec::new();
     for gen in 0..cli.generations {
         let start = Instant::now();
-        fitnesses = context.compute_fitness(&population)?;
-
-        let elite_indices = {
-            let mut indices = (0..cli.population_size).collect::<Vec<usize>>();
-            indices.sort_by(|&i, &j| fitnesses[i].partial_cmp(&fitnesses[j]).unwrap());
-            indices[..cli.elitism].to_vec()
-        };
-        let elites = elite_indices
-            .iter()
-            .map(|&i| population[i])
-            .collect::<Vec<Genome>>();
-
-        let mut new_population = elites.clone();
-        let mutation_rate = cli.initial_std * (-cli.decay_rate * gen as f32).exp();
-        while new_population.len() < cli.population_size {
-            let idx1 = rng.random_range(0..cli.population_size);
-            let mut idx2 = rng.random_range(0..cli.population_size);
-            while idx2 == idx1 {
-                idx2 = rng.random_range(0..cli.population_size);
-            }
-            let parent = if fitnesses[idx1] < fitnesses[idx2] {
-                population[idx1]
-            } else {
-                population[idx2]
-            };
-            let child = Genome {
-                i: parent.i + rng.sample(NormalDistribution::new(0.0, mutation_rate)),
-                x: parent.x + rng.sample(NormalDistribution::new(0.0, mutation_rate)),
-            };
-            new_population.push(child);
-        }
-
-        population = new_population;
-        let (_, best_fitness) = best_genome_and_fitness(&population, &fitnesses);
+        population.compute_generation(&mut context)?;
+        let (_, best_fitness) = population.best_genome();
         println!("Generation {}: {}", gen, best_fitness);
         if cli.timings {
             let duration = Instant::now() - start;
@@ -154,7 +120,7 @@ fn optimized_genome(cli: &Cli, mut context: FitnessCalculator) -> Result<Genome>
         }
     }
 
-    let (best_genome, best_fitness) = best_genome_and_fitness(&population, &fitnesses);
+    let (best_genome, best_fitness) = population.best_genome();
     println!("Best genome found with noise: {}", best_fitness);
     Ok(if best_genome.i < best_genome.x {
         println!("Warning: H-alpha component is less than OIII component; they may be swapped.");
@@ -165,13 +131,4 @@ fn optimized_genome(cli: &Cli, mut context: FitnessCalculator) -> Result<Genome>
     } else {
         best_genome
     })
-}
-
-fn best_genome_and_fitness(population: &Vec<Genome>, fitnesses: &Vec<f32>) -> (Genome, f32) {
-    let (best_idx, _) = fitnesses
-        .iter()
-        .enumerate()
-        .min_by(|&(_, a), &(_, b)| a.partial_cmp(b).unwrap())
-        .unwrap();
-    (population[best_idx], fitnesses[best_idx])
 }
