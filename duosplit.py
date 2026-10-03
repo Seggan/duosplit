@@ -63,14 +63,14 @@ except NoImageError:
 _, IMAGE_FILE = tempfile.mkstemp(suffix=".fit")
 save_fits(data, IMAGE_FILE, header)
 
-import atexit
-
 
 def delete_temp_image():
     import os
     os.remove(IMAGE_FILE)
     siril.reset_progress()
 
+
+import atexit
 
 atexit.register(delete_temp_image)
 
@@ -164,15 +164,64 @@ import stat
 
 RUNTIME_PATH.chmod(RUNTIME_PATH.stat().st_mode | stat.S_IEXEC)
 
-import json
+import sqlite3
 
-CAMERAS_FILE = Path(siril.get_siril_configdir()) / "duosplit_cameras.json"
-if not CAMERAS_FILE.exists():
-    with open(CAMERAS_FILE, "w") as f:
-        json.dump({}, f)
+CAMERAS_FILE = Path(siril.get_siril_configdir()) / "duosplit_cameras.db"
+db = sqlite3.connect(CAMERAS_FILE)
+atexit.register(db.close)
 
-with open(CAMERAS_FILE, "r") as f:
-    cameras = json.load(f)
+cursor = db.cursor()
+
+cursor.execute(
+    """CREATE TABLE IF NOT EXISTS cameras
+       (
+           id
+           INTEGER
+           PRIMARY
+           KEY,
+           name
+           TEXT
+           unique,
+           qe_ha_red
+           REAL,
+           qe_ha_green
+           REAL,
+           qe_ha_blue
+           REAL,
+           qe_oiii_red
+           REAL,
+           qe_oiii_green
+           REAL,
+           qe_oiii_blue
+           REAL
+       )
+    """
+)
+
+cursor.execute(
+    """CREATE TABLE IF NOT EXISTS selected
+    (
+        id
+        INTEGER
+        PRIMARY
+        KEY,
+        selected
+        INTEGER,
+        FOREIGN
+        KEY
+       (
+        selected
+       ) REFERENCES cameras
+       (
+           id
+       ) ON DELETE SET NULL
+        )
+    """
+)
+
+cursor.execute("""INSERT OR IGNORE INTO selected VALUES (0, NULL)""")
+
+db.commit()
 
 from dataclasses import dataclass
 
@@ -223,7 +272,7 @@ def run_duosplit(parameters: Parameters):
     env = os.environ.copy()
     if "WAYLAND_DISPLAY" in env:
         # WGPU is wonky with Wayland + Vulkan, so force it to use OpenGL instead
-        #env["WGPU_BACKEND"] = "gl"
+        # env["WGPU_BACKEND"] = "gl"
         pass
 
     args = [
@@ -364,26 +413,33 @@ class NewCameraDialog(QWidget):
         if not name:
             QMessageBox.critical(self, "Error", "Camera name cannot be empty.")
             return
+
+        cursor.execute("""SELECT EXISTS (SELECT 1 FROM cameras WHERE name = ?)""", (name,))
+        exists = cursor.fetchone()[0]
+        if exists:
+            QMessageBox.critical(self, "Error", "Camera with that name already exists.")
+            return
+
         try:
-            cameras[name] = {
-                "qe_r": {
-                    "ha": float(self.qe_red_ha.text().strip()),
-                    "oiii": float(self.qe_red_oiii.text().strip()),
-                },
-                "qe_g": {
-                    "ha": float(self.qe_green_ha.text().strip()),
-                    "oiii": float(self.qe_green_oiii.text().strip()),
-                },
-                "qe_b": {
-                    "ha": float(self.qe_blue_ha.text().strip()),
-                    "oiii": float(self.qe_blue_oiii.text().strip()),
-                },
-            }
+            cursor.execute("""
+                           INSERT INTO cameras(name, qe_ha_red, qe_ha_green, qe_ha_blue, qe_oiii_red, qe_oiii_green,
+                                               qe_oiii_blue)
+                           VALUES (?, ?, ?, ?, ?, ?, ?)
+                           """,
+                           (
+                               name,
+                               float(self.qe_red_ha.text().strip()),
+                               float(self.qe_green_ha.text().strip()),
+                               float(self.qe_blue_ha.text().strip()),
+                               float(self.qe_red_oiii.text().strip()),
+                               float(self.qe_green_oiii.text().strip()),
+                               float(self.qe_blue_oiii.text().strip()),
+                           )
+                           )
+            db.commit()
         except ValueError:
             QMessageBox.critical(self, "Error", "Quantum efficiency values must be valid numbers.")
             return
-        with open(CAMERAS_FILE, "w") as f:
-            json.dump(cameras, f, indent=4)
         self.close()
 
 
@@ -400,6 +456,10 @@ class MainWindow(QWidget):
         self.dropdown.activated.connect(self.handle_dropdown)
         form_layout.addRow("Camera:", self.dropdown)
         self.refresh_dropdown()
+        cursor.execute("""SELECT position - 1
+                          FROM (SELECT id, ROW_NUMBER() OVER(ORDER BY name) AS position FROM cameras)
+                          WHERE id = (SELECT selected FROM selected s WHERE s.id = 0)""")
+        self.dropdown.setCurrentIndex((cursor.fetchone() or [0])[0])
 
         self.population_input = QLineEdit()
         self.population_input.setText("100")
@@ -457,23 +517,36 @@ class MainWindow(QWidget):
             loop.exec()
             self.refresh_dropdown()
             self.dropdown.setCurrentIndex(0)
+        else:
+            cursor.execute("""UPDATE selected SET selected = (SELECT id FROM cameras WHERE name = ?) WHERE id = 0""", (self.dropdown.currentText(),))
+            db.commit()
 
     def refresh_dropdown(self):
         self.dropdown.clear()
-        for camera in cameras.keys():
-            self.dropdown.addItem(camera)
+        cursor.execute("SELECT name FROM cameras ORDER BY name")
+        for camera in cursor:
+            self.dropdown.addItem(camera[0])
         self.dropdown.addItem("Add new...")
 
     def run_action(self):
+        cursor.execute("""SELECT qe_ha_red, qe_ha_green, qe_ha_blue, qe_oiii_red, qe_oiii_green, qe_oiii_blue
+                          FROM cameras
+                          WHERE name = ?""", (self.dropdown.currentText(),))
+        camera = cursor.fetchone()
+        if not camera:
+            QMessageBox.information(self, "Error", "No camera selected")
+            return
+
+        cursor.execute("""UPDATE selected SET selected = ? WHERE id = 0""", (camera[0],))
+
         try:
-            camera = cameras[self.dropdown.currentText()]
             parameters = Parameters(
-                qe_r_ha=camera["qe_r"]["ha"],
-                qe_r_oiii=camera["qe_r"]["oiii"],
-                qe_g_ha=camera["qe_g"]["ha"],
-                qe_g_oiii=camera["qe_g"]["oiii"],
-                qe_b_ha=camera["qe_b"]["ha"],
-                qe_b_oiii=camera["qe_b"]["oiii"],
+                qe_r_ha=camera[1],
+                qe_g_ha=camera[2],
+                qe_b_ha=camera[3],
+                qe_r_oiii=camera[4],
+                qe_g_oiii=camera[5],
+                qe_b_oiii=camera[6],
                 population=int(self.population_input.text().strip()),
                 generations=int(self.generations_input.text().strip()),
                 elitism=int(self.elitism_input.text().strip()),
